@@ -38,6 +38,8 @@ Physical microphone capture is not verified for this release.
 
 Install Git, Python 3.11 or 3.12, and FFmpeg first.
 The setup script creates a local `.venv` and installs the Python package.
+On macOS and Linux, use `--run` to open the TUI after installation.
+For installation only, use `sh scripts/setup.sh`. Start the app later with `sh scripts/run.sh`.
 The first model download needs an internet connection and free disk space.
 
 ### macOS
@@ -49,8 +51,7 @@ Run these commands:
 brew install python@3.11 python-tk@3.11 ffmpeg
 git clone https://github.com/chaeyn/whisper-local-ko.git
 cd whisper-local-ko
-./scripts/setup.sh
-./scripts/run.sh
+sh scripts/setup.sh --run
 ```
 
 ### Linux
@@ -62,8 +63,7 @@ sudo apt update
 sudo apt install git python3 python3-venv python3-tk ffmpeg pulseaudio-utils
 git clone https://github.com/chaeyn/whisper-local-ko.git
 cd whisper-local-ko
-./scripts/setup.sh
-./scripts/run.sh
+sh scripts/setup.sh --run
 ```
 
 For another distribution, install the equivalent packages.
@@ -116,7 +116,7 @@ See the [user guide](docs/user-guide.md) for environment activation and removal.
 
 ## Convert a file
 
-Run the TUI with `./scripts/run.sh` on macOS or Linux.
+Run the TUI with `sh scripts/run.sh` on macOS or Linux.
 On Windows, use the `run.ps1` command above.
 
 1. Press `b` to open the file browser.

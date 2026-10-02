@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.1 - 2026-10-02
+
+- Install and start the app with POSIX `sh`.
+- Add `sh scripts/setup.sh --run` to open the TUI after installation.
+- Preserve paths with spaces and the caller's working folder.
+- Test a new Unix virtual environment through the installation script in CI.
+
 ## 0.1.0 - 2026-10-02
 
 First public beta release.

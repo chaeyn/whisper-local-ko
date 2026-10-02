@@ -40,11 +40,12 @@ jobs:
         if: runner.os == 'Windows'
         run: choco install ffmpeg --no-progress -y
       - name: Create virtual environment
+        if: runner.os == 'Windows'
         run: python -m venv .venv
       - name: Test Unix installer
         if: runner.os != 'Windows'
         run: |
-          WHISPER_PYTHON="$(command -v python)" ./scripts/setup.sh
+          WHISPER_PYTHON="$(command -v python)" sh scripts/setup.sh
           echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
       - name: Test Windows installer
         if: runner.os == 'Windows'

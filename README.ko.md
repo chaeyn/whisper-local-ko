@@ -38,6 +38,8 @@ Linux 마이크 입력에는 실행 중인 PulseAudio 호환 서버가 필요합
 
 먼저 Git, Python 3.11 또는 3.12, FFmpeg를 설치하세요.
 설치 스크립트는 이 폴더에 `.venv`를 만들고 Python 패키지를 설치합니다.
+macOS와 Linux에서는 `--run`을 붙이면 설치 후 TUI를 엽니다.
+설치만 하려면 `sh scripts/setup.sh`를 실행하세요. 나중에 실행할 때는 `sh scripts/run.sh`를 사용하세요.
 첫 모델 다운로드에는 인터넷 연결과 디스크 여유 공간이 필요합니다.
 
 ### macOS
@@ -49,8 +51,7 @@ Linux 마이크 입력에는 실행 중인 PulseAudio 호환 서버가 필요합
 brew install python@3.11 python-tk@3.11 ffmpeg
 git clone https://github.com/chaeyn/whisper-local-ko.git
 cd whisper-local-ko
-./scripts/setup.sh
-./scripts/run.sh
+sh scripts/setup.sh --run
 ```
 
 ### Linux
@@ -62,8 +63,7 @@ sudo apt update
 sudo apt install git python3 python3-venv python3-tk ffmpeg pulseaudio-utils
 git clone https://github.com/chaeyn/whisper-local-ko.git
 cd whisper-local-ko
-./scripts/setup.sh
-./scripts/run.sh
+sh scripts/setup.sh --run
 ```
 
 다른 배포판에서는 같은 기능의 패키지를 설치하세요.
@@ -116,7 +116,7 @@ whisper-ko
 
 ## 파일 변환
 
-macOS와 Linux에서는 `./scripts/run.sh`로 TUI를 실행하세요.
+macOS와 Linux에서는 `sh scripts/run.sh`로 TUI를 실행하세요.
 Windows에서는 위의 `run.ps1` 명령을 사용하세요.
 
 1. `b`를 눌러 파일 탐색기를 여세요.

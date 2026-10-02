@@ -1,6 +1,20 @@
 # Validation
 
-Release candidate: 0.1.0. Date: 2026-10-02.
+## Shell installation update: 0.1.1
+
+Date: 2026-10-02. Host: macOS Apple Silicon, Python 3.11.17.
+
+- `sh scripts/setup.sh --run` installed the package, passed diagnosis, and opened the TUI.
+- The TUI exited with `q` and exit code 0.
+- `sh` and `dash` syntax checks passed for both shell scripts.
+- `dash scripts/run.sh --version` reported 0.1.1.
+- `dash scripts/run.sh doctor --no-gui --tui` passed.
+- CI creates a new Unix virtual environment through `sh scripts/setup.sh`.
+- Shell regression tests check paths, arguments, failure handling, and launch behavior.
+
+## Base runtime checks: 0.1.0
+
+Date: 2026-10-02.
 
 ## Local checks
 

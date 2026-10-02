@@ -4,7 +4,10 @@
 
 ## Commands and environments
 
-Run the setup script from the repository folder.
+Run `sh scripts/setup.sh` from the repository folder on macOS or Linux.
+Add `--run` to install and then open the TUI.
+Use `sh scripts/run.sh` to start an installed app.
+These commands do not require execute permission on the script files.
 It keeps an existing `.venv` if that environment has a supported Python version.
 If setup rejects an old environment, rename that `.venv` folder before you run setup again.
 
