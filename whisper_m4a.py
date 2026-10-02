@@ -7,20 +7,107 @@ import re
 import sys
 from pathlib import Path
 
-try:
-    import tkinter as tk
-    from tkinter import filedialog, messagebox, ttk
-except ModuleNotFoundError as exc:
-    if exc.name == "_tkinter":
-        python_version = f"{sys.version_info.major}.{sys.version_info.minor}"
-        raise SystemExit(
-            "Tkinter is missing for this Homebrew Python. Install it with:\n"
-            f"  brew install python-tk@{python_version}\n"
-            "Then run this program again."
-        ) from exc
-    raise
+import argparse
+import importlib
+import shutil
+import queue
+import os
+import tempfile
+import fcntl
 
-import whisper
+
+def doctor(gui: bool = True) -> bool:
+    """모델을 다운로드하지 않고 실행 환경을 검사한다."""
+    ok = True
+    print(f"Python {sys.version.split()[0]}: {sys.executable}")
+    if sys.version_info[:2] != (3, 11):
+        print("안내: 검증 기준은 Python 3.11입니다. scripts/setup.sh를 사용하세요.")
+    checks = ["whisper", "torch", "transformers", "sentencepiece", "sacremoses"]
+    if gui:
+        checks.append("tkinter")
+    for name in checks:
+        try:
+            module = importlib.import_module(name)
+            if name == "transformers":
+                from transformers import MarianMTModel, MarianTokenizer
+            if name == "tkinter":
+                root = module.Tk()
+                root.withdraw()
+                root.update()
+                root.destroy()
+            print(f"[정상] {name}")
+        except Exception as exc:
+            ok = False
+            print(f"[실패] {name}: {exc}")
+            if name == "tkinter":
+                print("  brew install python-tk@3.11 후 scripts/run.sh로 실행하세요.")
+            else:
+                print("  scripts/setup.sh로 의존성을 설치하세요.")
+    if shutil.which("ffmpeg"):
+        print("[정상] FFmpeg")
+    else:
+        ok = False
+        print("[실패] FFmpeg: brew install ffmpeg")
+    print("모델 다운로드 및 음성 변환은 검사하지 않았습니다.")
+    return ok
+
+
+def save_transcript(output: Path, text: str, overwrite: bool = False) -> None:
+    if not text.strip():
+        raise ValueError("인식 결과가 비어 있습니다. 음성 언어와 파일 내용을 확인하세요.")
+    if not overwrite:
+        with output.open("x", encoding="utf-8") as stream:
+            stream.write(text.strip() + "\n")
+        return
+    # 덮어쓰기는 같은 폴더의 임시 파일을 완성한 뒤 교체한다.
+    with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=output.parent,
+                                     prefix=".whisper-", delete=False) as stream:
+        temporary = Path(stream.name)
+        try:
+            stream.write(text.strip() + "\n")
+            stream.close()
+            os.replace(temporary, output)
+        finally:
+            temporary.unlink(missing_ok=True)
+
+
+def transcribe_file(file_path: Path, model_size: str = "small", language: str | None = None,
+                    output: Path | None = None, overwrite: bool = False,
+                    status=print) -> tuple[str, Path]:
+    file_path = file_path.expanduser().resolve()
+    if not file_path.is_file():
+        raise ValueError(f"오디오 파일을 찾을 수 없습니다: {file_path}")
+    output = (output or file_path.with_name(f"{file_path.stem}.ko.txt")).expanduser().resolve()
+    if output == file_path:
+        raise ValueError("결과 경로는 원본 오디오와 달라야 합니다.")
+    if output.exists() and not overwrite:
+        raise FileExistsError(f"결과 파일이 있습니다: {output}. 다른 경로 또는 --overwrite를 사용하세요.")
+    if not output.parent.is_dir():
+        raise ValueError(f"결과 폴더가 없습니다: {output.parent}")
+    if not shutil.which("ffmpeg"):
+        raise RuntimeError("FFmpeg가 없습니다. brew install ffmpeg를 실행하세요.")
+    import whisper
+    status("Whisper 모델을 불러옵니다. 첫 사용은 다운로드가 필요합니다.")
+    cache = Path(os.getenv("XDG_CACHE_HOME", str(Path.home() / ".cache"))) / "whisper"
+    cache.mkdir(parents=True, exist_ok=True)
+    with (cache / f".{model_size}.download.lock").open("a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        model = whisper.load_model(model_size, device="cpu", download_root=str(cache))
+    status("음성을 받아쓰고 있습니다.")
+    result = model.transcribe(str(file_path), language=language, task="transcribe", fp16=False)
+    recognized = result["text"].strip()
+    spoken = result.get("language")
+    if not recognized:
+        raise ValueError("인식 결과가 비어 있습니다. 음성 언어와 파일 내용을 확인하세요.")
+    if spoken == "ko":
+        transcript = recognized
+    elif spoken == "en":
+        status("영한 번역 모델을 불러옵니다. 첫 사용은 다운로드가 필요합니다.")
+        transcript = EnglishToKoreanTranslator().translate(recognized)
+    else:
+        raise ValueError(f"감지한 언어: {spoken}. 한국어와 영어 음성만 지원합니다. 음성 언어를 직접 선택해 보세요.")
+    save_transcript(output, transcript, overwrite)
+    return transcript, output
 
 
 LANGUAGES = {
@@ -37,10 +124,10 @@ class EnglishToKoreanTranslator:
     """Whisper의 영어 인식 결과를 로컬 번역 모델로 한국어화한다."""
 
     def __init__(self) -> None:
-        from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
+        from transformers import MarianMTModel, MarianTokenizer
 
-        self.tokenizer = AutoTokenizer.from_pretrained(TRANSLATION_MODEL)
-        self.model = AutoModelForSeq2SeqLM.from_pretrained(TRANSLATION_MODEL)
+        self.tokenizer = MarianTokenizer.from_pretrained(TRANSLATION_MODEL, token=False)
+        self.model = MarianMTModel.from_pretrained(TRANSLATION_MODEL, token=False)
         self.model.eval()
 
     def translate(self, text: str) -> str:
@@ -114,7 +201,8 @@ class WhisperTranscriber:
         self.language = tk.StringVar(value="자동 감지")
         self.model_size = tk.StringVar(value="small")
         self.status = tk.StringVar(value="M4A 파일을 선택하세요. 결과는 한국어로 저장됩니다.")
-        self.translator: EnglishToKoreanTranslator | None = None
+        self.events: queue.Queue = queue.Queue()
+        self.root.after(100, self._poll_events)
 
         self._build_ui()
 
@@ -191,9 +279,15 @@ class WhisperTranscriber:
             messagebox.showinfo("파일 선택", "먼저 오디오 파일을 선택하세요.")
             return
 
+        output = self.file_path.with_name(f"{self.file_path.stem}.ko.txt")
+        overwrite = output.exists()
+        if overwrite and not messagebox.askyesno("결과 파일 교체", f"기존 결과를 교체할까요?\n{output}"):
+            return
         self.busy = True
         self.start_button.configure(state="disabled")
         self.choose_button.configure(state="disabled")
+        self.language_box.configure(state="disabled")
+        self.model_box.configure(state="disabled")
         self.status.set("Whisper가 음성을 인식하고 있습니다.")
         self.text.delete("1.0", "end")
         file_path = self.file_path
@@ -201,54 +295,32 @@ class WhisperTranscriber:
         language = LANGUAGES[self.language.get()]
         threading.Thread(
             target=self._transcribe,
-            args=(file_path, model_size, language),
+            args=(file_path, model_size, language, overwrite),
             daemon=True,
         ).start()
 
-    def _transcribe(self, file_path: Path, model_size: str, language: str | None) -> None:
+    def _poll_events(self) -> None:
         try:
-            model = whisper.load_model(model_size)
-            result = model.transcribe(
-                str(file_path),
-                language=language,
-                task="transcribe",
-                fp16=False,
-            )
-            spoken_language = result.get("language")
-            recognized_text = result["text"].strip()
+            while True:
+                kind, payload = self.events.get_nowait()
+                if kind == "status":
+                    self.status.set(payload)
+                elif kind == "success":
+                    self._finish_success(*payload)
+                else:
+                    self._finish_error(payload)
+        except queue.Empty:
+            pass
+        self.root.after(100, self._poll_events)
 
-            if spoken_language == "ko":
-                transcript = recognized_text
-            else:
-                english_text = recognized_text
-                if spoken_language != "en":
-                    self.root.after(
-                        0,
-                        self.status.set,
-                        "영어 이외의 음성이 감지되어 Whisper가 영어로 옮기고 있습니다.",
-                    )
-                    english_result = model.transcribe(
-                        str(file_path),
-                        language=spoken_language,
-                        task="translate",
-                        fp16=False,
-                    )
-                    english_text = english_result["text"].strip()
-
-                self.root.after(
-                    0,
-                    self.status.set,
-                    "로컬 번역 모델을 불러와 한국어로 바꾸고 있습니다. 첫 실행은 모델을 내려받습니다.",
-                )
-                if self.translator is None:
-                    self.translator = EnglishToKoreanTranslator()
-                transcript = self.translator.translate(english_text)
-
-            output_path = file_path.with_name(f"{file_path.stem}.ko.txt")
-            output_path.write_text(transcript + "\n", encoding="utf-8")
-            self.root.after(0, self._finish_success, transcript, output_path)
-        except Exception as exc:  # Show setup and decoding errors in the GUI.
-            self.root.after(0, self._finish_error, str(exc))
+    def _transcribe(self, file_path: Path, model_size: str, language: str | None,
+                    overwrite: bool) -> None:
+        try:
+            result = transcribe_file(file_path, model_size, language, overwrite=overwrite,
+                                    status=lambda text: self.events.put(("status", text)))
+            self.events.put(("success", result))
+        except Exception as exc:
+            self.events.put(("error", str(exc)))
 
     def _finish_success(self, transcript: str, output_path: Path) -> None:
         self.text.insert("1.0", transcript)
@@ -268,13 +340,47 @@ class WhisperTranscriber:
         self.busy = False
         self.start_button.configure(state="normal")
         self.choose_button.configure(state="normal")
+        self.language_box.configure(state="readonly")
+        self.model_box.configure(state="readonly")
 
 
-def main() -> None:
-    root = tk.Tk()
-    WhisperTranscriber(root)
-    root.mainloop()
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description="로컬 음성을 한국어 텍스트로 저장합니다.")
+    commands = parser.add_subparsers(dest="command")
+    check = commands.add_parser("doctor", help="설치 환경 진단")
+    check.add_argument("--no-gui", action="store_true", help="Tk 창 검사 생략")
+    commands.add_parser("gui", help="한국어 GUI 실행 (기본)")
+    convert = commands.add_parser("transcribe", help="명령줄 변환")
+    convert.add_argument("file", type=Path)
+    convert.add_argument("--language", choices=("auto", "ko", "en"), default="auto")
+    convert.add_argument("--model", choices=MODELS, default="small")
+    convert.add_argument("--output", type=Path)
+    convert.add_argument("--overwrite", action="store_true")
+    args = parser.parse_args(argv)
+    if args.command == "doctor":
+        return 0 if doctor(not args.no_gui) else 1
+    try:
+        if args.command == "transcribe":
+            _, output = transcribe_file(args.file, args.model,
+                                       None if args.language == "auto" else args.language,
+                                       args.output, args.overwrite)
+            print(f"저장 완료: {output}")
+        else:
+            global tk, filedialog, messagebox, ttk
+            try:
+                import tkinter as tk
+                from tkinter import filedialog, messagebox, ttk
+            except ImportError as exc:
+                raise RuntimeError("Tkinter가 없습니다. scripts/setup.sh 후 scripts/run.sh로 실행하세요. CLI는 Tkinter 없이 실행할 수 있습니다.") from exc
+            root = tk.Tk()
+            WhisperTranscriber(root)
+            root.mainloop()
+        return 0
+    except Exception as exc:
+        print(f"실패: {exc}", file=sys.stderr)
+        print("환경 확인: scripts/run.sh doctor", file=sys.stderr)
+        return 1
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
