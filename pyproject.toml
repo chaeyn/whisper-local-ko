@@ -30,7 +30,7 @@ dependencies = [
   "sacremoses==0.1.1",
   "torch==2.8.0",
   "filelock==4.0.9",
-  "windows-curses==2.4.1; sys_platform == 'win32'",
+  "windows-curses==2.4.2; sys_platform == 'win32'",
 ]
 
 [project.optional-dependencies]
