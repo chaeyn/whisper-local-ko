@@ -56,6 +56,14 @@ class ConversionTests(unittest.TestCase):
         self.assertEqual(output.read_text(), '새 결과\n')
         self.assertFalse(list(output.parent.glob('.whisper-*')))
 
+    def test_failed_publish_removes_temporary_file(self):
+        output = self.audio.with_suffix('.ko.txt')
+        with patch.object(app.os, 'link', side_effect=OSError('저장 실패')):
+            with self.assertRaises(OSError):
+                app.save_transcript(output, '결과')
+        self.assertFalse(output.exists())
+        self.assertFalse(list(output.parent.glob('.whisper-*')))
+
     def test_public_translation_model_ignores_inherited_credentials(self):
         transformers = Mock()
         with patch.dict('sys.modules', {'transformers': transformers}):

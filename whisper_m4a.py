@@ -55,18 +55,17 @@ def doctor(gui: bool = True) -> bool:
 def save_transcript(output: Path, text: str, overwrite: bool = False) -> None:
     if not text.strip():
         raise ValueError("인식 결과가 비어 있습니다. 음성 언어와 파일 내용을 확인하세요.")
-    if not overwrite:
-        with output.open("x", encoding="utf-8") as stream:
-            stream.write(text.strip() + "\n")
-        return
-    # 덮어쓰기는 같은 폴더의 임시 파일을 완성한 뒤 교체한다.
+    # 완성한 임시 파일만 공개한다. TUI 중단 시 기존 결과를 보호한다.
     with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=output.parent,
                                      prefix=".whisper-", delete=False) as stream:
         temporary = Path(stream.name)
         try:
             stream.write(text.strip() + "\n")
             stream.close()
-            os.replace(temporary, output)
+            if overwrite:
+                os.replace(temporary, output)
+            else:
+                os.link(temporary, output)
         finally:
             temporary.unlink(missing_ok=True)
 
@@ -351,6 +350,7 @@ def main(argv: list[str] | None = None) -> int:
     check = commands.add_parser("doctor", help="설치 환경 진단")
     check.add_argument("--no-gui", action="store_true", help="Tk 창 검사 생략")
     commands.add_parser("gui", help="한국어 GUI 실행 (기본)")
+    commands.add_parser("tui", help="한국어 터미널 UI 실행")
     convert = commands.add_parser("transcribe", help="명령줄 변환")
     convert.add_argument("file", type=Path)
     convert.add_argument("--language", choices=("auto", "ko", "en"), default="auto")
@@ -361,7 +361,10 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "doctor":
         return 0 if doctor(not args.no_gui) else 1
     try:
-        if args.command == "transcribe":
+        if args.command == "tui":
+            from whisper_tui import main as tui_main
+            tui_main()
+        elif args.command == "transcribe":
             _, output = transcribe_file(args.file, args.model,
                                        None if args.language == "auto" else args.language,
                                        args.output, args.overwrite)
