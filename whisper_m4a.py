@@ -116,7 +116,8 @@ LANGUAGES = {
     "영어": "en",
 }
 MODELS = ("tiny", "base", "small", "medium", "large")
-TRANSLATION_MODEL = "Helsinki-NLP/opus-mt-tc-big-en-ko"
+TRANSLATION_MODEL = "Neurora/opus-hplt-en-ko-v2.0"
+TRANSLATION_REVISION = "06f3f7b03a97728560826d7387e1ea25224c65a9"
 TRANSLATION_CHUNK_TOKENS = 400
 
 
@@ -126,8 +127,8 @@ class EnglishToKoreanTranslator:
     def __init__(self) -> None:
         from transformers import MarianMTModel, MarianTokenizer
 
-        self.tokenizer = MarianTokenizer.from_pretrained(TRANSLATION_MODEL, token=False)
-        self.model = MarianMTModel.from_pretrained(TRANSLATION_MODEL, token=False)
+        self.tokenizer = MarianTokenizer.from_pretrained(TRANSLATION_MODEL, revision=TRANSLATION_REVISION, token=False)
+        self.model = MarianMTModel.from_pretrained(TRANSLATION_MODEL, revision=TRANSLATION_REVISION, token=False)
         self.model.eval()
 
     def translate(self, text: str) -> str:

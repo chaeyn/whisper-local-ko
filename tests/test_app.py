@@ -60,8 +60,8 @@ class ConversionTests(unittest.TestCase):
         transformers = Mock()
         with patch.dict('sys.modules', {'transformers': transformers}):
             app.EnglishToKoreanTranslator()
-        transformers.MarianTokenizer.from_pretrained.assert_called_once_with(app.TRANSLATION_MODEL, token=False)
-        transformers.MarianMTModel.from_pretrained.assert_called_once_with(app.TRANSLATION_MODEL, token=False)
+        transformers.MarianTokenizer.from_pretrained.assert_called_once_with(app.TRANSLATION_MODEL, revision=app.TRANSLATION_REVISION, token=False)
+        transformers.MarianMTModel.from_pretrained.assert_called_once_with(app.TRANSLATION_MODEL, revision=app.TRANSLATION_REVISION, token=False)
 
     def test_long_translation_chunks_keep_all_tokens(self):
         translator = object.__new__(app.EnglishToKoreanTranslator)

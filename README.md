@@ -1,6 +1,6 @@
 # Whisper on Mac
 
-M4A·MP3·WAV 음성을 한국어 텍스트로 저장하는 로컬 프로그램입니다. 한국어 음성은 OpenAI Whisper로 받아쓰고, 영어 음성은 받아쓴 뒤 OPUS-MT 영한 모델로 번역합니다. 한국어 GUI와 CLI를 제공합니다.
+M4A·MP3·WAV 음성을 한국어 텍스트로 저장하는 로컬 프로그램입니다. 한국어 음성은 OpenAI Whisper로 받아쓰고, 영어 음성은 받아쓴 뒤 OPUS/HPLT 영한 모델로 번역합니다. 한국어 GUI와 CLI를 제공합니다.
 
 오디오와 인식한 문장은 외부 서비스로 보내지 않습니다. 패키지 설치와 모델 첫 다운로드에는 인터넷이 필요합니다. 모델 다운로드 과정에서 모델 제공 서버에 접속하며, 다운로드한 모델은 사용자 캐시에 보관합니다. 계정이나 API 키는 필요하지 않습니다.
 
@@ -58,6 +58,6 @@ Tkinter 오류가 나면 `brew install python-tk@3.11` 후 `scripts/run.sh`로 �
 ## 모델 출처
 
 - [OpenAI Whisper](https://github.com/openai/whisper): 코드와 모델 MIT License. FFmpeg로 오디오를 읽고 로컬에서 인식합니다.
-- [Helsinki-NLP/opus-mt-tc-big-en-ko](https://huggingface.co/Helsinki-NLP/opus-mt-tc-big-en-ko): 영한 번역 모델, CC-BY-4.0. Transformers의 Marian 모델 클래스로 실행합니다.
+- [Neurora/opus-hplt-en-ko-v2.0](https://huggingface.co/Neurora/opus-hplt-en-ko-v2.0): [HPLT/translate-en-ko-v2.0-hplt_opus](https://huggingface.co/HPLT/translate-en-ko-v2.0-hplt_opus)의 Transformers 변환본, CC-BY-4.0. Marian 모델 클래스로 실행하며 검증한 revision `06f3f7b03a97728560826d7387e1ea25224c65a9`를 고정합니다.
 
 이 프로젝트 자체의 재배포 라이선스는 아직 지정하지 않았습니다. 공개 배포 시 프로젝트 라이선스를 정하고 모델·의존성의 라이선스를 함께 확인하세요.
