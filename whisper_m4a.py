@@ -396,6 +396,17 @@ def main(argv: list[str] | None = None) -> int:
     convert.add_argument("--model", choices=MODELS, default="small")
     convert.add_argument("--output", type=Path)
     convert.add_argument("--overwrite", action="store_true")
+    commands.add_parser("live", help="Live microphone captions", add_help=False)
+    if argv is None:
+        argv = sys.argv[1:]
+    if argv and argv[0] == "live":
+        from whisper_live import main as live_main
+        try:
+            live_main(argv[1:])
+            return 0
+        except Exception as exc:
+            print(f"Error: {exc}", file=sys.stderr)
+            return 1
     args = parser.parse_args(argv)
     if args.command == "doctor":
         return 0 if doctor(not args.no_gui) else 1

@@ -136,6 +136,25 @@ class TuiTests(unittest.TestCase):
         self.assertIn('>>>', loading)
         self.assertNotIn('%', loading)
 
+    def test_live_stop_does_not_force_terminate_worker(self):
+        self.ui.process = Mock()
+        self.ui.live = True
+        self.ui.live_stop = Mock()
+        self.ui.key('x')
+        self.ui.live_stop.set.assert_called_once()
+        self.ui.process.terminate.assert_not_called()
+        self.ui.key('q'); self.ui.key('y')
+        self.assertTrue(self.ui.quit_after_live)
+        self.assertTrue(self.ui.running)
+
+    def test_live_rejects_existing_output(self):
+        output = self.source.with_suffix('.ko.txt')
+        output.write_text('기존')
+        self.ui.fields[1] = str(output)
+        self.ui.key('v')
+        self.context.Process.assert_not_called()
+        self.assertEqual(output.read_text(), '기존')
+
     def test_draw_handles_small_and_large_terminals(self):
         for dimensions in [(8, 25), (24, 80), (40, 120)]:
             self.ui.screen.getmaxyx.return_value = dimensions

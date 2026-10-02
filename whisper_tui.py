@@ -11,6 +11,7 @@ import shlex
 import sys
 import unicodedata
 import time
+from datetime import datetime
 from pathlib import Path
 
 from whisper_m4a import LANGUAGES, MODELS
@@ -134,6 +135,12 @@ class Tui:
         self.entries = []
         self.selection = 0
         self.browser_status = ""
+        self.live = False
+        self.live_stop = None
+        self.quit_after_live = False
+        self.device = "default"
+        self.devices = [("default", "System default")]
+        self.device_index = 0
 
 
     @property
@@ -184,6 +191,43 @@ class Tui:
             self.status = f"Error: {exc} Try again."
         self.pending = None
 
+    def start_live(self, source=None):
+        from whisper_live import live_worker
+        try:
+            output = parse_path(self.fields[1]) if self.fields[1].strip() else Path.cwd() / f"live-{datetime.now():%Y%m%d-%H%M%S-%f}.ko.txt"
+            if output.exists():
+                raise ValueError("Live captions need a new output file. Press o to choose a new path.")
+            if not output.parent.is_dir():
+                raise ValueError(f"Output folder not found: {output.parent}")
+            self.result, self.saved, self.scroll = "", "", 0
+            self.live_stop = self.context.Event()
+            self.process = self.context.Process(target=live_worker,
+                args=(self.events, self.live_stop, str(output), MODELS[self.model],
+                      list(LANGUAGES.values())[self.language], self.device, source), daemon=True)
+            self.process.start()
+            self.live = True
+            self.progress = ("Starting live captions", None, None)
+            self.status = "Loading models, then listening. x: stop and save."
+        except Exception as exc:
+            self.process = None
+            self.live = False
+            self.status = f"Error: {exc}"
+
+    def select_device(self):
+        try:
+            from whisper_live import audio_devices
+            if len(self.devices) == 1:
+                self.devices += audio_devices()
+            self.device_index = (self.device_index + 1) % len(self.devices)
+            self.device, name = self.devices[self.device_index]
+            self.status = f"Microphone: {name} ({self.device}). v: start live captions."
+        except Exception as exc:
+            self.status = f"Error: {exc}"
+
+    def finish_live(self):
+        self.live_stop.set()
+        self.status = "Stopping capture and finishing buffered audio. Completed captions remain saved."
+
     def poll(self):
         while True:
             try:
@@ -194,13 +238,16 @@ class Tui:
                 self.status = payload
             elif kind == "progress":
                 self.progress = payload
+            elif kind == "caption":
+                self.result, self.saved = payload
+                self.scroll = max(0, len(wrap_cells(self.result, self.screen.getmaxyx()[1] - 2)) - (self.screen.getmaxyx()[0] - 20))
             elif kind == "success":
                 self.result, self.saved = payload
                 self.progress = ("Done", 1, 1)
                 self.status = "Done. Result saved. Use Up/Down or PgUp/PgDn to read."
             else:
                 self.progress = ("Failed", None, None)
-                self.status = f"Error: {payload} Check the path/settings and press s to retry."
+                self.status = f"Error: {payload} Check the path/settings and press s/v to retry."
         if self.process is not None and not self.process.is_alive():
             self.process.join()
             # 정상 완료 시 Queue feeder가 종료된 후 마지막 이벤트를 읽는다.
@@ -210,6 +257,9 @@ class Tui:
             if process.exitcode and not self.status.startswith("Error:"):
                 self.status = "Conversion stopped. Run doctor to check the environment and retry."
             process.close()
+            self.live = False
+            if self.quit_after_live:
+                self.running = False
 
     def open_browser(self):
         try:
@@ -265,6 +315,9 @@ class Tui:
                 action, self.confirm = self.confirm, None
                 if action == "overwrite":
                     self.launch(True)
+                elif self.live:
+                    self.quit_after_live = True
+                    self.finish_live()
                 else:
                     self.running = False
             elif key in ("n", "N", "\x1b"):
@@ -293,8 +346,22 @@ class Tui:
             step = {curses.KEY_UP: -1, curses.KEY_DOWN: 1, curses.KEY_PPAGE: -10, curses.KEY_NPAGE: 10}[key]
             self.scroll = max(0, self.scroll + step)
         if self.busy:
+            if self.live and key == "x":
+                self.finish_live()
             return
-        if key == "\t":
+        if key == "v":
+            self.start_live()
+        elif key == "r":
+            try:
+                source = parse_path(self.fields[0])
+                if not source.is_file():
+                    raise ValueError(f"File not found: {source}")
+                self.start_live(str(source))
+            except (ValueError, OSError) as exc:
+                self.status = f"Error: {exc}"
+        elif key == "d":
+            self.select_device()
+        elif key == "\t":
             self.focus = (self.focus + 1) % 5
         elif key == curses.KEY_BTAB:
             self.focus = (self.focus - 1) % 5
@@ -350,9 +417,9 @@ class Tui:
                 put(row, line)
             put(5, "Local audio -> Korean | b: attach file", True)
             values = [f"Audio: {self.fields[0] or '(b/Enter: browse, f: type path)'}",
-                      f"Output: {self.fields[1] or '(<filename>.ko.txt beside source)'}",
+                      f"Output: {self.fields[1] or '(file: beside source / live: timestamp)'}",
                       f"Language: {LANGUAGE_LABELS[self.language]}", f"Model: {MODELS[self.model]}",
-                      "Start conversion" + (" (running)" if self.busy else "")]
+                      ("Live captions (x: stop)" if self.live else "Start conversion") + (" (running)" if self.busy else "")]
             for index, value in enumerate(values):
                 # 입력 중 긴 경로는 끝부분을 표시한다.
                 if self.editing and index == self.focus:
@@ -369,7 +436,7 @@ class Tui:
             for index, line in enumerate(lines[self.scroll:self.scroll + room]):
                 put(17 + index, line)
             put(height - 3, "Editing: Enter/Esc finish | Ctrl+U clear" if self.editing else "b attach | f path | o output | l language | m model | s start | Tab move")
-            put(height - 2, "Up/Down or PgUp/PgDn: scroll | q: quit" + (" | settings locked" if self.busy else ""))
+            put(height - 2, f"v mic | r replay | d device: {self.device} | x stop | Up/Down scroll | q quit")
         screen.refresh()
 
     def run(self):
