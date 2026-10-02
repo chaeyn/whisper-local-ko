@@ -14,6 +14,15 @@ from pathlib import Path
 
 from whisper_m4a import LANGUAGES, MODELS
 
+AUDIO_EXTENSIONS = {".m4a", ".mp3", ".wav", ".flac", ".ogg", ".aiff", ".aac", ".mp4"}
+HEADER = (
+    r" _    _ _   _ ___ ____  ____  _____ ____",
+    r"| |  | | | | |_ _/ ___||  _ \| ____|  _ \ ",
+    r"| |/\| | |_| || |\___ \| |_) |  _| | |_) |",
+    r"|__/\__|_| |_|___|____/|____/|_____|_| \_\ ",
+)
+
+
 
 def parse_path(value: str) -> Path:
     value = value.strip()
@@ -77,6 +86,12 @@ class Tui:
         self.context = mp.get_context("spawn")
         self.events = self.context.Queue()
         self.running = True
+        self.browsing = False
+        self.directory = Path.cwd()
+        self.entries = []
+        self.selection = 0
+        self.browser_status = ""
+
 
     @property
     def busy(self):
@@ -148,7 +163,55 @@ class Tui:
                 self.status = "변환 프로세스가 종료됐습니다. doctor로 환경을 확인하고 다시 시작하세요."
             process.close()
 
+    def open_browser(self):
+        try:
+            current = parse_path(self.fields[0]) if self.fields[0].strip() else Path.cwd()
+            self.directory = current if current.is_dir() else current.parent
+        except (ValueError, OSError):
+            self.directory = Path.cwd()
+        self.browsing = True
+        self.read_directory()
+
+    def read_directory(self):
+        try:
+            entries = [entry for entry in self.directory.iterdir()
+                       if not entry.name.startswith(".") and
+                       (entry.is_dir() or entry.suffix.lower() in AUDIO_EXTENSIONS)]
+            self.entries = [self.directory.parent] + sorted(entries, key=lambda entry: (not entry.is_dir(), entry.name.casefold()))
+            self.selection = 0
+            self.browser_status = "오디오 파일을 골라 Enter로 첨부하세요."
+        except OSError as exc:
+            self.entries = [self.directory.parent]
+            self.selection = 0
+            self.browser_status = f"폴더를 읽을 수 없습니다: {exc}"
+
+    def browser_key(self, key):
+        if key in ("\x1b", "q", "\x03"):
+            self.browsing = False
+        elif key in (curses.KEY_UP, curses.KEY_DOWN, curses.KEY_PPAGE, curses.KEY_NPAGE):
+            step = {curses.KEY_UP: -1, curses.KEY_DOWN: 1, curses.KEY_PPAGE: -10, curses.KEY_NPAGE: 10}[key]
+            self.selection = max(0, min(len(self.entries) - 1, self.selection + step))
+        elif key in (curses.KEY_BACKSPACE, "\x7f", "\b"):
+            self.directory = self.directory.parent
+            self.read_directory()
+        elif key in ("\n", "\r") and self.entries:
+            selected = self.entries[self.selection]
+            if selected.is_dir():
+                self.directory = selected.resolve()
+                self.read_directory()
+            elif selected.is_file():
+                self.fields[0] = str(selected.resolve())
+                self.browsing = False
+                self.focus = 0
+                self.status = f"파일 첨부: {selected.name}. s로 변환을 시작하세요."
+            else:
+                self.read_directory()
+                self.browser_status = "파일이 이동되거나 삭제됐습니다. 다시 선택하세요."
+
     def key(self, key):
+        if self.browsing:
+            self.browser_key(key)
+            return
         if self.confirm:
             if key in ("y", "Y"):
                 action, self.confirm = self.confirm, None
@@ -187,6 +250,8 @@ class Tui:
             self.focus = (self.focus + 1) % 5
         elif key == curses.KEY_BTAB:
             self.focus = (self.focus - 1) % 5
+        elif key == "b":
+            self.open_browser()
         elif key in ("f", "o"):
             self.focus = 0 if key == "f" else 1
             self.editing = True
@@ -197,7 +262,9 @@ class Tui:
         elif key == "s":
             self.start()
         elif key in ("\n", "\r"):
-            if self.focus < 2:
+            if self.focus == 0:
+                self.open_browser()
+            elif self.focus == 1:
                 self.editing = True
             elif self.focus == 2:
                 self.language = (self.language + 1) % len(LANGUAGES)
@@ -218,11 +285,23 @@ class Tui:
                 screen.addstr(row, 1, clipped, curses.A_REVERSE if highlight else curses.A_NORMAL)
             except curses.error:
                 pass
-        if height < 18 or width < 60:
-            put(0, "터미널 창을 60열 × 18행 이상으로 늘려주세요. q: 종료")
+        if height < 24 or width < 60:
+            put(0, "터미널 창을 60열 × 24행 이상으로 늘려주세요. Esc 후 q: 종료")
+        elif self.browsing:
+            put(0, "파일 첨부 | 오디오 선택", True)
+            put(2, str(self.directory))
+            put(3, "↑↓ 선택 · Enter 폴더 열기/파일 첨부 · Backspace 상위 · Esc 취소")
+            room = height - 8
+            start = max(0, self.selection - room + 1)
+            for index, entry in enumerate(self.entries[start:start + room], start):
+                label = "[..] 상위 폴더" if index == 0 else ("[폴더] " if entry.is_dir() else "[음성] ") + entry.name
+                put(5 + index - start, label, index == self.selection)
+            put(height - 2, self.browser_status)
         else:
-            put(0, "Whisper | 로컬 음성 → 한국어", True)
-            values = [f"오디오: {self.fields[0] or '(f 또는 Enter로 입력)'}",
+            for row, line in enumerate(HEADER):
+                put(row, line)
+            put(5, "로컬 음성 → 한국어 | b 파일 첨부", True)
+            values = [f"오디오: {self.fields[0] or '(b 또는 Enter로 파일 선택 / f 경로 입력)'}",
                       f"저장: {self.fields[1] or '(원본 옆 <파일명>.ko.txt)'}",
                       f"언어: {list(LANGUAGES)[self.language]}", f"모델: {MODELS[self.model]}",
                       "변환 시작" + (" (실행 중)" if self.busy else "")]
@@ -230,17 +309,17 @@ class Tui:
                 # 입력 중 긴 경로는 끝부분을 표시한다.
                 if self.editing and index == self.focus:
                     value = "입력: …" + self.fields[index][-max(8, (width - 14) // 2):]
-                put(index + 2, value, index == self.focus)
+                put(index + 7, value, index == self.focus)
             status = wrap_cells(self.status, width - 2)
-            put(8, status[0])
-            put(9, status[1] if len(status) > 1 else "")
-            put(10, f"저장 완료: {self.saved}" if self.saved else "결과")
+            put(13, status[0])
+            put(14, status[1] if len(status) > 1 else "")
+            put(15, f"저장 완료: {self.saved}" if self.saved else "결과")
             lines = wrap_cells(self.result or "변환 결과가 여기에 표시됩니다.", width - 2)
-            room = height - 15
+            room = height - 20
             self.scroll = min(self.scroll, max(0, len(lines) - room))
             for index, line in enumerate(lines[self.scroll:self.scroll + room]):
-                put(12 + index, line)
-            put(height - 3, "입력 중: Enter 확정 / Esc 종료 / Ctrl+U 지우기" if self.editing else "Tab 이동 · Enter 선택 · f 파일 · o 저장 · l 언어 · m 모델 · s 시작")
+                put(17 + index, line)
+            put(height - 3, "입력 중: Enter 확정 / Esc 종료 / Ctrl+U 지우기" if self.editing else "b 첨부 · f 경로 · o 저장 · l 언어 · m 모델 · s 시작 · Tab 이동")
             put(height - 2, "↑↓ / PgUp·PgDn 결과 스크롤 · q 종료" + (" · 실행 중 설정 잠금" if self.busy else ""))
         screen.refresh()
 

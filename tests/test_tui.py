@@ -102,6 +102,33 @@ class TuiTests(unittest.TestCase):
         self.assertTrue(self.ui.status.startswith('실패:'))
         self.context.Process.assert_not_called()
 
+    def test_browser_filters_audio_and_selects_file(self):
+        (self.source.parent / 'notes.txt').write_text('내용')
+        self.ui.key('b')
+        self.assertTrue(self.ui.browsing)
+        self.assertNotIn('notes.txt', [entry.name for entry in self.ui.entries])
+        self.ui.selection = self.ui.entries.index(self.source)
+        self.ui.key('\n')
+        self.assertFalse(self.ui.browsing)
+        self.assertEqual(self.ui.fields[0], str(self.source))
+
+    def test_browser_enters_folder_and_cancel_preserves_file(self):
+        folder = self.source.parent / '오디오'
+        folder.mkdir()
+        self.ui.key('b')
+        self.ui.selection = self.ui.entries.index(folder)
+        self.ui.key('\n')
+        self.assertEqual(self.ui.directory, folder)
+        self.ui.key(curses.KEY_BACKSPACE)
+        self.assertEqual(self.ui.directory, folder.parent)
+        self.ui.key('\x1b')
+        self.assertEqual(self.ui.fields[0], str(self.source))
+
+    def test_browser_is_locked_during_conversion(self):
+        self.ui.process = Mock()
+        self.ui.key('b')
+        self.assertFalse(self.ui.browsing)
+
     def test_draw_handles_small_and_large_terminals(self):
         for dimensions in [(8, 25), (24, 80), (40, 120)]:
             self.ui.screen.getmaxyx.return_value = dimensions
