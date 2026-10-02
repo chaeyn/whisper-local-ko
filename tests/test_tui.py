@@ -43,7 +43,7 @@ class TuiTests(unittest.TestCase):
     def test_missing_file_can_retry(self):
         self.ui.fields[0] = str(self.source.parent / 'missing.m4a')
         self.ui.start()
-        self.assertTrue(self.ui.status.startswith('실패:'))
+        self.assertTrue(self.ui.status.startswith('Error:'))
         self.ui.fields[0] = str(self.source)
         with patch.object(self.ui, 'launch') as launch:
             self.ui.key('s')
@@ -99,7 +99,7 @@ class TuiTests(unittest.TestCase):
     def test_original_output_is_rejected(self):
         self.ui.fields[1] = str(self.source)
         self.ui.start()
-        self.assertTrue(self.ui.status.startswith('실패:'))
+        self.assertTrue(self.ui.status.startswith('Error:'))
         self.context.Process.assert_not_called()
 
     def test_browser_filters_audio_and_selects_file(self):

@@ -350,7 +350,7 @@ def main(argv: list[str] | None = None) -> int:
     check = commands.add_parser("doctor", help="설치 환경 진단")
     check.add_argument("--no-gui", action="store_true", help="Tk 창 검사 생략")
     commands.add_parser("gui", help="한국어 GUI 실행 (기본)")
-    commands.add_parser("tui", help="한국어 터미널 UI 실행")
+    commands.add_parser("tui", help="Run the English terminal UI")
     convert = commands.add_parser("transcribe", help="명령줄 변환")
     convert.add_argument("file", type=Path)
     convert.add_argument("--language", choices=("auto", "ko", "en"), default="auto")
@@ -381,8 +381,12 @@ def main(argv: list[str] | None = None) -> int:
             root.mainloop()
         return 0
     except Exception as exc:
-        print(f"실패: {exc}", file=sys.stderr)
-        print("환경 확인: scripts/run.sh doctor", file=sys.stderr)
+        if args.command == "tui":
+            print(f"Error: {exc}", file=sys.stderr)
+            print("Check setup: scripts/run.sh doctor --no-gui", file=sys.stderr)
+        else:
+            print(f"실패: {exc}", file=sys.stderr)
+            print("환경 확인: scripts/run.sh doctor", file=sys.stderr)
         return 1
 
 
