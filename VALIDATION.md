@@ -1,81 +1,88 @@
-# 실행 검증 기록
+# Validation
 
-2026-10-02, macOS Apple Silicon, Homebrew Python 3.11.17에서 확인했습니다.
+Release candidate: 0.1.0. Date: 2026-10-02.
 
-## 통과
+## Local checks
 
-- 새 `.venv`에서 `scripts/setup.sh` 실행: 고정 패키지 설치와 최종 doctor 통과.
-- `scripts/run.sh doctor`: Whisper·PyTorch·Transformers·SentencePiece·Sacremoses import, FFmpeg, Tk 창 생성·종료 통과.
-- `python -m pip check`: 의존성 충돌 없음.
-- 단위 테스트 7개 통과: 한국어 UTF-8 저장, 영어 번역 경로, 기존 결과·원본 보호, 빈 결과·지원하지 않는 언어 거부, 덮어쓰기, 긴 텍스트 분할, 공개 모델 인증 미사용.
-- 앱 GUI 초기화와 이벤트 루프 실행·종료 통과. 실제 영어 M4A를 GUI 변환 함수로 시작해 worker·이벤트 큐·완료 처리를 거친 후, 창의 표시 텍스트와 저장 파일이 일치함을 확인했습니다. 파일 선택창을 수동 클릭하는 시험은 하지 않았습니다.
-- 없는 파일의 CLI 요청: 이해할 수 있는 오류와 종료 코드 1 확인.
-- 한국어·영어 합성 음성을 FFmpeg로 M4A로 만든 뒤 실제 로컬 모델로 변환하고 저장했습니다. 사용자 오디오는 사용하지 않았습니다.
+Host: macOS Apple Silicon. Python: 3.11.17.
 
-한국어 원문(macOS Yuna):
+| Check | Result |
+| --- | --- |
+| Unit and FFmpeg tests | 83 passed; one optional model test skipped in the default suite |
+| Optional model test | Passed separately with `WHISPER_INTEGRATION=1` |
+| English speech to Korean | Passed with a synthetic English M4A and the real tiny and translation models |
+| Direct English-to-Korean translation | Passed with the pinned translation model |
+| Environment check | Whisper, PyTorch, Transformers, SentencePiece, Sacremoses, Filelock, curses, Tk, FFmpeg passed |
+| TUI workflow | File browser, tiny Korean conversion, progress, saved result, overwrite cancellation, and quit passed in an interactive terminal |
+| File replay and stop | Passed with actual FFmpeg input and a stop event |
+| Wheel and source archive | Build and metadata checks passed |
+| Installed wheel | Imports and CLI passed outside the source folder |
+| Dependency check | No broken requirements |
+| Static checks | Fatal syntax/name checks and shell syntax passed |
 
-> 안녕하세요. 오늘 회의에서는 프로젝트 일정과 다음 주 계획을 이야기합니다.
+The model test uses the [credited Korean audio fixture](tests/fixtures/README.md).
+It checks file decoding, recognition, Korean output, live file replay, and saved text.
+It checks for Korean text and the greeting `안녕`.
+This test does not measure general transcription accuracy.
 
-Whisper `small` 저장 결과:
-
-> 안녕하세오 오늘 회의에서는 프로젝트 일정과 다음 주 계획을 이야기 합니다.
-
-영어 원문(macOS Samantha):
-
-> Hello. Today we will discuss the project schedule and our plans for next week.
-
-Whisper `small` + OPUS/HPLT 저장 결과:
+The English speech test produced:
 
 > 안녕하세요, 오늘 우리는 프로젝트 일정과 다음 주에 대한 계획에 대해 논의할 것입니다.
 
-## 발견하고 수정한 문제
+The input sentence was:
 
-- 기존 `Helsinki-NLP/opus-mt-tc-big-en-ko`는 정상 영어 문장에도 의미가 맞지 않는 결과를 냈습니다. 음성 인식 단계와 직접 텍스트 번역을 따로 검사해 번역 모델에서 발생함을 확인했습니다. [원본 프로젝트 이슈 #81](https://github.com/Helsinki-NLP/OPUS-MT-train/issues/81)에도 같은 모델의 문제 보고가 있습니다.
-- 실제 문장 번역을 통과한 `Neurora/opus-hplt-en-ko-v2.0`로 교체하고 모델 revision을 고정했습니다. [변환 모델](https://huggingface.co/Neurora/opus-hplt-en-ko-v2.0), [원본 HPLT 모델](https://huggingface.co/HPLT/translate-en-ko-v2.0-hplt_opus)을 출처로 사용합니다.
-- 공개 Hugging Face 모델 다운로드에 기존 인증이 개입해 실패했습니다. `token=False`로 공개 요청을 사용합니다.
-- Whisper 첫 다운로드를 동시에 시작했을 때 SHA256 검사 실패를 확인했습니다. 같은 모델의 다운로드·로딩 구간에 파일 잠금을 적용했습니다. 적용 후 동시 첫 다운로드를 다시 시험하지는 않았습니다.
+> Hello. Today we will discuss the project schedule and our plans for next week.
 
-## 검증 한계
+## Automated platform checks
 
-합성 문장 몇 개의 실행·저장 검증입니다. 사용자 녹음, 잡음, 긴 회의, 혼합 언어, Intel Mac, 다른 macOS 버전은 확인하지 않았습니다. `tiny`에서 한국어 오인식이 커졌고 `small`에서도 철자 오류가 남았습니다. 정량적인 인식·번역 정확도나 처리속도는 측정하지 않았습니다.
+The [CI workflow](.github/workflows/ci.yml) checks six combinations:
 
-검증용 오디오, 출력과 로그는 Git에서 제외한 `work/`에만 보관했습니다. 모델은 사용자 캐시에 저장하며 Git에 포함하지 않습니다. GitHub 생성·push는 수행하지 않았습니다.
+| Runner | Architecture | Python |
+| --- | --- | --- |
+| macOS 14 | arm64 | 3.11 and 3.12 |
+| Ubuntu 24.04 | x64 | 3.11 and 3.12 |
+| Windows Server 2022 | x64 | 3.11 and 3.12 |
 
+Each job installs FFmpeg and runs the platform installer.
+Each job checks dependencies, tests, documentation links, distributions, and installed wheel imports.
+Python 3.11 jobs also run the real Whisper model test.
+Job artifacts contain packages and the installed dependency list.
 
-## TUI 추가 검증 (2026-10-02)
+See [GitHub Actions](https://github.com/chaeyn/whisper-local-ko/actions/workflows/ci.yml) for recorded run results.
+The platform table states the test scope. Read the run conclusion before you treat a platform check as passed.
 
-- 기존 7개와 신규 11개를 합쳐 단위 테스트 18개 통과. Unicode·공백·Finder 경로 입력, 덮어쓰기 확인/취소, 잘못된 경로 후 재시도, 실행 중 설정 잠금/종료 확인, 한국어 폭에 맞춘 줄바꿈·스크롤, worker 성공/오류, 종료 시 프로세스 정리, 원본 경로 보호, 작은 창 렌더링, 결과 공개 실패 시 임시 파일 정리를 검사했습니다.
-- 실제 PTY에서 `scripts/run.sh tui`로 실행했습니다. 키 입력으로 영어 합성 M4A 경로, 별도 저장 경로, 영어 언어와 tiny 모델을 선택했습니다. 진행 단계, 위 영한 번역 결과, 저장 경로를 화면에서 확인했고 실제 파일도 같은 내용을 저장했습니다.
-- 같은 PTY에서 존재하지 않는 파일 오류를 확인하고 경로를 수정했습니다. 기존 결과 교체에서 n으로 취소 후 y로 재시작했습니다. 실행 중 q → n으로 계속, q → y로 종료를 확인했습니다. 종료 코드 0과 curses 대체 화면/커서 복원 시퀀스를 확인했고 기존 결과 파일 내용도 보존됐습니다. 중단은 새 worker를 시작한 직후에 시험했습니다.
-- 비대화형 입력에서 TUI 요청은 안내 문구와 종료 코드 1을 반환했습니다. `pip check`도 통과했습니다. 표준 curses·multiprocessing을 사용하므로 의존성 및 고정 패키지 목록은 변경하지 않았습니다.
-- 긴 결과 스크롤, 작은 창, Unicode 경로는 단위 테스트로 확인했습니다. 실제 긴 오디오·다운로드 도중 종료·저장 직전 종료·터미널 앱별 붙여넣기 동작은 별도로 시험하지 않았습니다. 테스트에는 이전 단계에서 만든 합성 파일만 사용했습니다.
+## Coverage and limits
 
+Tests cover file protection, UTF-8 text, failed saves, command errors, device parsing, model locks, and worker cleanup.
+Tests also cover terminal file selection, overwrite confirmation, progress events, replay, and stop behavior.
+Mock tests check the platform-specific device arguments.
+Actual FFmpeg tests check file input and cancellation.
 
-## 파일 첨부·ASCII 헤더 추가 검증
+Physical microphone recording has not been tested in this release.
+Device enumeration on macOS passed. Enumeration does not prove microphone capture.
+Windows and Linux hardware permissions and audio-service configuration require a local check.
+GUI initialization passed on macOS. The full GUI file-picker workflow has not been tested on Windows or Linux.
 
-전체 테스트 21개 통과. 신규 테스트는 오디오 필터·파일 선택, 폴더 진입·상위 이동·취소 시 기존 선택 유지, 변환 중 탐색 잠금을 검사합니다. 실제 PTY에서 ASCII 헤더와 파일 목록을 열고, 검증용 work 폴더의 합성 오디오를 선택해 메인 화면에 첨부 경로가 표시되는 것을 확인했습니다. 이 변경에서는 음성 변환을 다시 실행하지 않았습니다. 파일 탐색기는 로컬 선택만 수행합니다.
+The app uses CPU inference.
+No GPU, Intel Mac, Linux arm64, Windows arm64, or Python version outside 3.11 and 3.12 is supported in this release.
+Long recordings, noise, mixed languages, quiet speech, and chunk-boundary accuracy have not been measured.
+Model output can contain errors. Review the saved text.
 
+Output folders must support hard links for safe first-time publication.
+Use a local APFS, ext4, or NTFS folder. FAT, exFAT, and some network folders can reject saves.
 
-## 영어 TUI 변경 검증
+## Repeat the checks
 
-TUI 메뉴·파일 탐색기·확인창·진행 상태·공용 엔진의 오류 안내를 영어로 변경했습니다. 오디오 언어 값과 한국어 결과는 유지했습니다. 전체 테스트 21개 통과. 실제 PTY에서 영어 메인 화면과 파일 탐색기를 확인하고 정상 종료했습니다. UI 문구 변경에 대해 음성 변환을 다시 실행하지 않았습니다.
+```bash
+python -m pip install -e '.[dev]'
+python -m unittest discover -s tests -v
+python -m pip check
+python -m ruff check .
+python scripts/check_docs.py
+python -m build
+python -m twine check dist/*
+python scripts/check_wheel.py
+```
 
-
-## TUI 진행 바 검증
-
-전체 테스트 23개와 pip check 통과. Whisper 오디오 프레임 업데이트를 진행 이벤트로 전달하며, 영어 번역은 완료한 텍스트 묶음 비율을 전달합니다. 모델 로딩·다운로드·저장은 측정 가능한 총량이 없어 움직이는 바로 표시합니다. 음성 인식 및 번역 비율은 각 단계의 진행률입니다.
-
-실제 PTY에서 다운로드한 443.06초 한국어 교통 강좌 MP3를 tiny 모델로 변환했습니다. 로딩 단계의 움직이는 바, Transcribing 0%→6%→13%→…→95%, 완료 시 Done 100%, 한국어 결과 표시와 work/progress-demo.ko.txt 저장을 확인했습니다. 기존 강좌 결과 파일은 교체하지 않았습니다. 이 시험은 진행 이벤트·완료·저장 검증이며 인식 정확도를 평가하지 않았습니다. 실제 영어 번역 묶음 진행 바는 이번 변경에서 별도로 실행하지 않았습니다.
-
-
-## 로컬 실시간 자막 추가 검증
-
-전체 테스트 33개, pip check 통과. 신규 테스트는 모델 1회 로딩, 묶음별 누적 저장, 기존 파일 보호, 녹음 전 중지, 입력 오류 시 완료 자막 보존, 영한 번역 경로, 마이크 목록 파싱, 입력 길이 검증, 버퍼 상한/음성 누락 오류, TUI 중지 시 Event 전달·강제 종료 미사용을 확인했습니다.
-
-FFmpeg AVFoundation 목록에서 iPhone Microphone과 MacBook Pro Microphone을 확인했습니다. 실제 마이크를 열어 녹음하는 시험은 수행하지 않았습니다. 물리적 마이크 권한·캡처·인식은 미검증입니다.
-
-공개 한국어 교통 강좌의 앞 18초를 테스트용 MP3로 발췌해 실제 PTY의 r 재생 모드에서 6초씩 입력했습니다. 완료 전에 자막이 추가되고 매번 파일에 저장되는 것을 확인했습니다. 3개 묶음 완료와 정상 종료도 확인했습니다. 결과에는 오인식이 있어 정확도 보장은 하지 않습니다. 테스트 오디오/출력/로그는 work/에만 보관합니다. 파일 처리 s와 파일 재생 r, 마이크 v는 입력 방식만 다릅니다.
-
-실제 영어 실시간 음성·장시간 캡처·외부 오디오 URL·잡음·혼합 언어·묶음 경계의 정확도는 검증하지 않았습니다. 영어 경로는 모의 모델로 테스트했습니다. 고정 묶음 방식이며 개별 단어를 즉시 수정하는 자막이나 화자 분리를 제공하지 않습니다.
-
-CLI 실제 중지 시험: 파일 재생이 시작된 뒤 7초 시점에 SIGINT(Ctrl+C)를 보냈습니다. FFmpeg 입력을 닫고 완성한 묶음과 남은 일부 음성을 처리하여 자막 2줄을 저장하고 종료 코드 0을 반환했습니다. 실제 TUI x 키 중지는 단위 테스트로 확인했고, 앞선 PTY에서 x 입력은 파일 재생이 이미 완료된 뒤 도착했으므로 실시간 중지 증거로 사용하지 않았습니다.
+Set `WHISPER_INTEGRATION=1` before you run `test_integration.py` to enable model downloads and actual inference.
+See the [contribution guide](CONTRIBUTING.md) for commands on each operating system.

@@ -12,3 +12,17 @@ models/
 *.aiff
 *.ko.txt
 .DS_Store
+.env
+.env.*
+!.env.example
+dist/
+build/
+*.egg-info/
+.coverage*
+htmlcov/
+.ruff_cache/
+.pytest_cache/
+*.aac
+*.mp4
+*.aif
+!tests/fixtures/*.ogg

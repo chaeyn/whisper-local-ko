@@ -16,7 +16,7 @@ from pathlib import Path
 
 from whisper_m4a import LANGUAGES, MODELS
 
-LANGUAGE_LABELS = ("Auto detect", "Korean", "English")
+LANGUAGE_LABELS = tuple(LANGUAGES)
 
 AUDIO_EXTENSIONS = {".m4a", ".mp3", ".wav", ".flac", ".ogg", ".aiff", ".aac", ".mp4"}
 HEADER = (
@@ -32,17 +32,25 @@ def parse_path(value: str) -> Path:
     value = value.strip()
     if not value:
         raise ValueError("Enter an audio file path.")
-    # Finder에서 끌어온 따옴표/이스케이프 경로도 받는다.
-    if value[0] in "\"'" or "\\ " in value:
+    # Windows paths use backslashes as separators. POSIX drag-and-drop paths
+    # can use shell quotes and escaped spaces.
+    if sys.platform == "win32":
+        if value[0] in "\"'":
+            if value[-1] != value[0] or len(value) < 2:
+                raise ValueError("Close the quote around the file path.")
+            value = value[1:-1]
+    elif value[0] in "\"'" or "\\ " in value:
         parts = shlex.split(value)
         if len(parts) != 1:
             raise ValueError("Enter one file path at a time.")
         value = parts[0]
+    if not value:
+        raise ValueError("Enter an audio file path.")
     return Path(value).expanduser().resolve()
 
 
 def wrap_cells(text: str, width: int) -> list[str]:
-    """한글의 두 칸 폭을 반영하고 빈 줄을 보존한다."""
+    """Wrap wide Korean characters and preserve empty lines."""
     lines = []
     for paragraph in text.split("\n"):
         line, used = "", 0
@@ -59,43 +67,18 @@ def wrap_cells(text: str, width: int) -> list[str]:
     return lines
 
 
-def english_message(message: str) -> str:
-    """Localize shared-engine messages without changing Korean transcripts."""
-    exact = {
-        "Whisper 모델을 불러옵니다. 첫 사용은 다운로드가 필요합니다.": "Loading Whisper. First use requires a model download.",
-        "음성을 받아쓰고 있습니다.": "Transcribing audio...",
-        "영한 번역 모델을 불러옵니다. 첫 사용은 다운로드가 필요합니다.": "Loading the English-to-Korean model. First use requires a download.",
-        "인식 결과가 비어 있습니다. 음성 언어와 파일 내용을 확인하세요.": "No speech was recognized. Check the audio and language setting.",
-        "결과 경로는 원본 오디오와 달라야 합니다.": "The output path must differ from the source audio.",
-        "FFmpeg가 없습니다. brew install ffmpeg를 실행하세요.": "FFmpeg is missing. Run brew install ffmpeg.",
-    }
-    if message in exact:
-        return exact[message]
-    for original, translated in (("오디오 파일을 찾을 수 없습니다: ", "Audio file not found: "),
-                                 ("결과 폴더가 없습니다: ", "Output folder not found: ")):
-        if message.startswith(original):
-            return translated + message[len(original):]
-    if message.startswith("감지한 언어: "):
-        language = message.split(": ", 1)[1].split(".", 1)[0]
-        return f"Detected language: {language}. Only Korean and English are supported. Select the audio language manually."
-    if message.startswith("결과 파일이 있습니다: "):
-        path = message.split(": ", 1)[1].rsplit(". 다른 경로", 1)[0]
-        return f"Output already exists: {path}. Choose another path or confirm replacement."
-    return message
-
-
 def convert_worker(events, source: str, model: str, language: str | None,
                    output: str, overwrite: bool) -> None:
-    # curses 화면에는 상태 이벤트만 표시한다. 라이브러리의 출력은 숨긴다.
+    # Send status events to curses. Suppress library output in the worker.
     from whisper_m4a import transcribe_file
     try:
         with open(os.devnull, "w") as sink, contextlib.redirect_stdout(sink), contextlib.redirect_stderr(sink):
             text, saved = transcribe_file(Path(source), model, language, Path(output), overwrite,
-                                         status=lambda message: events.put(("status", english_message(message))),
+                                         status=lambda message: events.put(("status", message)),
                                          progress=lambda stage, done, total: events.put(("progress", (stage, done, total))))
         events.put(("success", (text, str(saved))))
     except Exception as exc:
-        events.put(("error", english_message(str(exc))))
+        events.put(("error", str(exc)))
 
 
 def progress_bar(progress, width=24, busy=False):
@@ -139,7 +122,7 @@ class Tui:
         self.live_stop = None
         self.quit_after_live = False
         self.device = "default"
-        self.devices = [("default", "System default")]
+        self.devices = [("default", "Default input")]
         self.device_index = 0
 
 
@@ -149,12 +132,17 @@ class Tui:
 
     def stop_worker(self):
         if self.process is not None:
+            if self.process.is_alive() and self.live and self.live_stop is not None:
+                # Give the capture watcher time to stop FFmpeg before a forced
+                # worker exit. Windows termination does not run Python finally.
+                self.live_stop.set()
+                self.process.join(timeout=5)
             if self.process.is_alive():
                 self.process.terminate()
             self.process.join()
             self.process.close()
             self.process = None
-        # 종료한 worker의 남은 이벤트가 다음 작업에 섞이지 않게 한다.
+        # Discard events from the previous worker before another job starts.
         self.events.close()
         self.events = self.context.Queue()
 
@@ -250,7 +238,7 @@ class Tui:
                 self.status = f"Error: {payload} Check the path/settings and press s/v to retry."
         if self.process is not None and not self.process.is_alive():
             self.process.join()
-            # 정상 완료 시 Queue feeder가 종료된 후 마지막 이벤트를 읽는다.
+            # Read final events after the worker has flushed its queue.
             process = self.process
             self.process = None
             self.poll()
@@ -258,6 +246,7 @@ class Tui:
                 self.status = "Conversion stopped. Run doctor to check the environment and retry."
             process.close()
             self.live = False
+            self.live_stop = None
             if self.quit_after_live:
                 self.running = False
 
@@ -421,7 +410,7 @@ class Tui:
                       f"Language: {LANGUAGE_LABELS[self.language]}", f"Model: {MODELS[self.model]}",
                       ("Live captions (x: stop)" if self.live else "Start conversion") + (" (running)" if self.busy else "")]
             for index, value in enumerate(values):
-                # 입력 중 긴 경로는 끝부분을 표시한다.
+                # Keep the end of a long path visible during editing.
                 if self.editing and index == self.focus:
                     value = "Input: ..." + self.fields[index][-max(8, (width - 14) // 2):]
                 put(index + 7, value, index == self.focus)
@@ -441,7 +430,8 @@ class Tui:
 
     def run(self):
         self.screen.timeout(100)
-        curses.curs_set(0)
+        with contextlib.suppress(curses.error):
+            curses.curs_set(0)
         try:
             while self.running:
                 self.poll()
@@ -459,7 +449,7 @@ class Tui:
 
 def main():
     if not sys.stdin.isatty() or not sys.stdout.isatty():
-        raise RuntimeError("Run the TUI in an interactive terminal: ./scripts/run.sh tui")
+        raise RuntimeError("Run the TUI in an interactive terminal: whisper-ko tui")
     locale.setlocale(locale.LC_ALL, "")
     curses.wrapper(lambda screen: Tui(screen).run())
 

@@ -1,116 +1,211 @@
-# Whisper on Mac
+# Whisper Local KO
 
-M4A·MP3·WAV 음성을 한국어 텍스트로 저장하는 로컬 프로그램입니다. 한국어 음성은 OpenAI Whisper로 받아쓰고, 영어 음성은 받아쓴 뒤 OPUS/HPLT 영한 모델로 번역합니다. 한국어 GUI·CLI와 영어 TUI를 제공합니다. 마이크 음성을 일정 길이로 나눠 한국어 자막으로 표시하는 로컬 실시간 모드도 제공합니다.
+[한국어](README.ko.md) · [User guide](docs/user-guide.md) · [Contribute](CONTRIBUTING.md) · [Test record](VALIDATION.md)
 
-오디오와 인식한 문장은 외부 서비스로 보내지 않습니다. 패키지 설치와 모델 첫 다운로드에는 인터넷이 필요합니다. 모델 다운로드 과정에서 모델 제공 서버에 접속하며, 다운로드한 모델은 사용자 캐시에 보관합니다. 계정이나 API 키는 필요하지 않습니다.
+Convert Korean or English speech to Korean text on your computer.
+Select a local audio file, or use a microphone for live captions.
 
-## 처음 설치
+- Use a terminal interface (TUI), a command line (CLI), or a desktop window (GUI).
+- Select files with the TUI file browser.
+- View progress during file conversion.
+- Save UTF-8 text beside the source file, or select an output path.
+- Keep audio and transcripts on your computer. No account or API key is required.
 
-macOS와 [Homebrew](https://brew.sh)가 필요합니다. 이 폴더를 내려받거나 복사한 뒤 터미널에서 실행하세요. 경로에 공백이 있으면 따옴표로 감싸세요.
+The interface uses English. The transcript uses Korean.
+Whisper transcribes speech. A local translation model converts English text to Korean.
+Review the transcript before you use it.
+
+## Supported environments
+
+| Environment | Architecture | Python | Live audio input |
+| --- | --- | --- | --- |
+| macOS | Apple Silicon / ARM64 | 3.11, 3.12 | FFmpeg AVFoundation |
+| Linux desktop | x86_64 | 3.11, 3.12 | FFmpeg PulseAudio; PipeWire with PulseAudio support |
+| Windows | x86_64 | 3.11, 3.12 | FFmpeg DirectShow |
+
+This release uses the CPU. Intel Macs, ARM Linux, and ARM Windows are outside the support target.
+The pinned PyTorch release does not provide an Intel macOS wheel.
+
+The TUI needs an interactive terminal with at least 60 columns and 24 rows.
+The GUI needs Tk and a desktop session. The CLI can run without a display.
+Linux microphone capture needs a running PulseAudio-compatible server.
+
+Automated checks and physical-device tests cover different behavior.
+Read [VALIDATION.md](VALIDATION.md) for the tests that passed and the tests that remain unverified.
+Physical microphone capture is not verified for this release.
+
+## Install
+
+Install Git, Python 3.11 or 3.12, and FFmpeg first.
+The setup script creates a local `.venv` and installs the Python package.
+The first model download needs an internet connection and free disk space.
+
+### macOS
+
+Install [Homebrew](https://brew.sh/) if it is absent.
+Run these commands:
 
 ```bash
-cd /설치한/경로/whisper-on-mac
+brew install python@3.11 python-tk@3.11 ffmpeg
+git clone https://github.com/chaeyn/whisper-local-ko.git
+cd whisper-local-ko
 ./scripts/setup.sh
 ./scripts/run.sh
 ```
 
-설치 스크립트는 Homebrew Python 3.11, 해당 버전의 Tkinter, FFmpeg를 설치하고 이 폴더의 `.venv`에 고정 버전 패키지를 설치합니다. 마지막에 환경 진단을 실행합니다. 기존 `.venv`가 다른 Python 버전이면 중단하므로 폴더 이름을 바꿔 보존한 뒤 다시 실행하세요.
+### Linux
 
-Python 3.11을 검증 기준으로 사용합니다. 기존 Homebrew Python 3.14 가상환경에 패키지를 추가하는 방식 대신 위 설치 절차로 별도 환경을 만드세요. 모델 파일과 가상환경은 저장소에 포함하지 않습니다. Apple Silicon에서 실행을 확인했으며 Intel Mac은 확인하지 않았습니다.
-
-## GUI 사용
-
-1. **파일 선택**에서 오디오를 고릅니다.
-2. 음성 언어는 **자동 감지**, **한국어**, **영어** 중 선택합니다. 짧은 음성의 언어를 잘못 감지하면 직접 선택하세요.
-3. 모델을 고르고 **변환 시작**을 누릅니다. 기본값은 `small`이며 첫 시험에는 `tiny`를 사용할 수 있습니다. 큰 모델은 메모리와 시간이 더 필요합니다.
-4. 결과를 창에서 확인합니다. 원본 옆에 `<파일명>.ko.txt`가 UTF-8로 저장됩니다. 기존 결과가 있으면 교체 여부를 묻습니다.
-
-첫 변환은 Whisper 모델을 내려받습니다. 영어 음성은 영한 모델도 내려받으므로 다운로드 시간과 디스크 공간이 더 필요합니다. CPU로 처리하며 실행 중 앱을 닫으면 작업이 중단됩니다. 오류가 나오면 파일 경로, 여유 공간, 인터넷 연결과 환경 진단 결과를 확인하세요.
-
-자동 감지에서 한국어·영어 외의 언어가 나오면 변환을 중단합니다. 인식·번역 품질은 음질과 발화에 따라 달라지므로 저장된 텍스트를 확인하세요. 앱 창에서 텍스트를 편집해도 저장 파일에는 반영하지 않습니다.
-
-## TUI 사용 (영어 UI)
+For Ubuntu 24.04, run these commands:
 
 ```bash
-./scripts/run.sh tui
+sudo apt update
+sudo apt install git python3 python3-venv python3-tk ffmpeg pulseaudio-utils
+git clone https://github.com/chaeyn/whisper-local-ko.git
+cd whisper-local-ko
+./scripts/setup.sh
+./scripts/run.sh
 ```
 
-TUI 메뉴·안내·진행 상태는 영어로 표시하고, 변환 결과는 한국어로 저장합니다. 대화형 터미널에서 실행합니다. Python 표준 라이브러리 `curses`를 사용하므로 추가 패키지는 필요하지 않습니다. Tkinter 없이 실행할 수 있습니다. 터미널 창은 60열 × 24행 이상으로 열어주세요.
+For another distribution, install the equivalent packages.
+Check that `python3 --version` reports 3.11 or 3.12.
+The setup script does not install Linux system packages.
 
-| 키 | 동작 |
+### Windows
+
+Use PowerShell. Install the prerequisites:
+
+```powershell
+winget install --exact --id Git.Git
+winget install --exact --id Python.Python.3.11
+winget install --exact --id Gyan.FFmpeg
+```
+
+Open a new PowerShell window. Run these commands:
+
+```powershell
+git clone https://github.com/chaeyn/whisper-local-ko.git
+cd whisper-local-ko
+powershell -ExecutionPolicy Bypass -File .\scripts\setup.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\run.ps1
+```
+
+These commands set the execution policy for the script process only.
+They do not change the saved system policy.
+For Python 3.12, add `-PythonVersion 3.12` to the setup command.
+
+### Use an existing Python environment
+
+Use a virtual environment with Python 3.11 or 3.12.
+On Linux and Windows, install the CPU build of PyTorch first:
+
+```bash
+python -m pip install torch==2.8.0 --index-url https://download.pytorch.org/whl/cpu
+```
+
+Then run these commands from the repository folder:
+
+```bash
+python -m pip install .
+whisper-ko doctor --no-gui --tui
+whisper-ko
+```
+
+The package name is `whisper-local-ko`. The command name is `whisper-ko`.
+This repository installation does not require a PyPI release.
+See the [user guide](docs/user-guide.md) for environment activation and removal.
+
+## Convert a file
+
+Run the TUI with `./scripts/run.sh` on macOS or Linux.
+On Windows, use the `run.ps1` command above.
+
+1. Press `b` to open the file browser.
+2. Select an audio file.
+3. Press `l` to select the speech language.
+4. Press `m` to select the model. Use `tiny` for the first check.
+5. Press `s` to start conversion.
+6. Check the Korean result and the saved path.
+
+The default file model is `small`. The default language is automatic detection.
+For short recordings, select `Korean` or `English` to reduce language detection errors.
+
+The app writes `meeting.ko.txt` beside `meeting.m4a`.
+Press `o` to select another output path. Create the output folder first.
+If a result exists, the TUI asks before it replaces that file.
+
+| Key | Action |
 | --- | --- |
-| `b` / 오디오 항목의 `Enter` | 폴더를 탐색해 오디오 파일 선택·첨부 |
-| `f` | 오디오 경로 직접 입력. Finder에서 파일을 끌어온 경로도 사용 가능 |
-| `o` | 결과 파일 경로 입력. 비워 두면 원본 옆에 저장 |
-| `Enter` / `Esc` | 경로 입력 종료. 입력한 값은 유지 |
-| `Ctrl+U` / `Backspace` | 경로 전체 지우기 / 마지막 문자 지우기 |
-| `Tab` / `Shift+Tab` | 항목 이동 |
-| `Enter` | 선택 항목 입력·변경·시작 |
-| `l` / `m` | 음성 언어 / Whisper 모델을 다음 값으로 변경 |
-| `s` | 변환 시작 또는 실패 후 재시도 |
-| `↑` / `↓` / `PgUp` / `PgDn` | 결과 스크롤 |
-| `q` | 종료. 실행 중에는 중단 확인 |
-| `y` / `n` | 기존 결과 교체 또는 작업 중단 확인 / 취소 |
+| `b` | Browse local files |
+| `f` / `o` | Edit the input path / output path |
+| `l` / `m` | Select the next language / model |
+| `s` | Start file conversion |
+| `v` / `d` | Start microphone captions / select a microphone |
+| `r` | Process the selected file at its normal time rate |
+| `x` | Stop live input and finish buffered audio |
+| `↑` / `↓` / `PgUp` / `PgDn` | Scroll the result |
+| `q` | Quit; confirm if work is active |
 
-`b`를 눌러 파일 목록을 열고 방향키로 이동합니다. `Enter`로 폴더를 열거나 오디오를 첨부하고, `Backspace`로 상위 폴더에 이동하며 `Esc`로 취소합니다. 목록에는 폴더와 지원하는 오디오만 표시합니다. 첨부는 로컬 파일 선택이며 외부 업로드를 하지 않습니다. 언어와 모델을 고르고 `s`를 누르면 변환합니다. 진행 단계와 진행 바, 한국어 결과, 저장 경로가 화면에 표시됩니다. `Transcribing` 진행률은 처리한 오디오 프레임 비율이며, `Translating`은 처리한 텍스트 묶음 비율입니다. 모델 로딩·다운로드·저장은 전체 진행률을 측정하지 않아 움직이는 바로 표시합니다. 각 단계의 진행률이며 전체 작업 시간이나 남은 시간을 뜻하지 않습니다. 기존 결과가 있으면 `y`를 눌러야 교체합니다. 오류가 나면 경로·설정을 수정하고 `s`로 다시 실행하세요.
+The [user guide](docs/user-guide.md) describes path editing, file selection, progress, and stop behavior.
 
-변환 중에는 설정 입력을 잠급니다. `q` 또는 입력 모드 밖의 `Ctrl+C`를 누르면 중단 여부를 묻습니다. `y`를 누르면 변환 프로세스를 종료하고 터미널 상태를 복원합니다. 완성한 결과만 저장 경로에 공개하므로 중단 과정에서 기존 결과를 부분 텍스트로 교체하지 않습니다. 완료 직전에 종료를 선택했다면 완성된 결과가 이미 저장됐을 수 있습니다. 중단 시 숨겨진 `.whisper-*` 임시 파일이 남을 수 있습니다.
+## Use the CLI or GUI
 
-경로 입력에는 붙여넣기·끝에 추가·Backspace·Ctrl+U를 지원합니다. 입력 커서 이동은 제공하지 않습니다. 긴 경로는 입력 중 끝부분을 표시하고, 긴 결과는 줄바꿈과 스크롤로 확인합니다.
-
-## 실시간 마이크 자막
-
-TUI에서 `l`로 음성 언어, `m`으로 모델을 고르고 `v`를 누릅니다. 처음에는 `Korean`과 `tiny`를 권장합니다. `d`로 마이크를 순환 선택하고 `x`로 녹음을 중지합니다. 중지하면 입력을 닫고 이미 받은 음성까지 처리한 뒤 종료합니다. 실행 중 `q` → `y`도 처리를 마친 뒤 앱을 종료합니다.
-
-자막은 기본 6초 단위로 추가됩니다. 모델 로딩이 끝난 뒤 녹음을 시작하며, 영어는 로컬 영한 번역을 거쳐 한국어로 표시합니다. 완료된 자막은 매번 저장합니다. `o`에서 저장 경로를 지정하지 않으면 현재 프로젝트 폴더의 `live-<시각>.ko.txt`를 사용합니다. 실시간 모드는 기존 파일을 교체하지 않으므로 새 경로를 선택하세요. 음성이 인식되지 않은 세션은 빈 파일이 남을 수 있습니다.
+The examples below use `whisper-ko` in an active virtual environment.
+You can also pass the same arguments to the run script.
 
 ```bash
-./scripts/run.sh live --list-devices
-./scripts/run.sh live --device default --language ko --model tiny
-./scripts/run.sh live --device 1 --language en --model base --chunk-seconds 8 --output "새경로.ko.txt"
+whisper-ko transcribe "meeting.m4a" --language ko --model small
+whisper-ko transcribe "interview.mp3" --language en --output "interview.ko.txt"
+whisper-ko gui
+whisper-ko doctor
 ```
 
-마이크 번호는 이 컴퓨터의 `--list-devices` 결과를 사용하세요. macOS가 마이크 권한을 요청하면 터미널 앱 또는 실행 호스트에 권한을 허용합니다. 입력 실패 시 시스템 설정의 개인정보 보호 및 보안 → 마이크와 선택한 장치를 확인하세요. 오디오 입력은 [FFmpeg AVFoundation](https://ffmpeg.org/ffmpeg-devices.html#avfoundation)을 사용합니다. 마이크 오디오는 메모리에서 처리하며 별도 녹음 파일이나 외부 서버에 저장하지 않습니다. 한국어 자막 파일은 로컬에 저장합니다.
+The CLI stops if the output file exists.
+Add `--overwrite` only when you intend to replace that file.
+The GUI asks before it replaces a result.
+Save results on a local filesystem with hard-link support, such as APFS, ext4, or NTFS.
+For exFAT, FAT, or an unsupported network drive, select an output path in your home folder.
 
-CLI에서는 `Ctrl+C`로 녹음을 중지하고 버퍼를 처리합니다. 로딩이나 현재 음성 인식이 끝날 때까지 종료를 기다릴 수 있습니다. 입력 버퍼는 최대 5묶음으로 제한합니다. 처리 속도가 따라가지 못하면 녹음을 중지하고 일부 음성을 처리하지 못했다는 오류를 표시하며, 이미 완성한 자막은 보존합니다.
-
-이 방식은 짧은 오디오 묶음을 순차 인식합니다. 첫 자막은 6초와 모델 처리 시간 뒤에 나옵니다. 묶음 경계에서 단어를 잘못 인식하거나 일부를 빠뜨릴 수 있고, 약한 음성은 무음 기준에 걸릴 수 있습니다. 잡음·혼합 언어·장시간 녹음의 정확도는 검증하지 않았습니다. 기기에 따라 입력보다 처리 속도가 느릴 수 있습니다. 기기별 실제 마이크 캡처는 직접 확인해야 합니다.
-
-마이크 없이 시험하려면 파일을 실시간 속도로 재생합니다. TUI에서 파일을 선택하고 `r`을 누르거나 다음 명령을 사용하세요.
+## Use live captions
 
 ```bash
-./scripts/run.sh live --input "한국어.mp3" --language ko --model tiny --output "새결과.ko.txt"
+whisper-ko live --list-devices
+whisper-ko live --language ko --model tiny
 ```
 
-## CLI와 환경 진단
+The live CLI defaults to `tiny`, Korean speech, and six-second audio chunks.
+The TUI uses its selected language and model for live captions.
+Select `Korean` and `tiny` before you press `v`.
 
-```bash
-./scripts/run.sh doctor
-./scripts/run.sh doctor --no-gui
-./scripts/run.sh transcribe "/경로/회의.m4a" --language ko --model small
-./scripts/run.sh transcribe "/경로/interview.m4a" --language en --model tiny --output "/경로/인터뷰.ko.txt"
-```
+Use `--device` with a device ID from `--list-devices`.
+On Windows, `default` selects the first listed DirectShow microphone.
+It does not follow the Windows default-device setting.
 
-`--language auto`가 기본값입니다. `--output`을 생략하면 원본 옆에 저장합니다. CLI는 결과 파일이 있으면 중단합니다. 교체할 때만 `--overwrite`를 붙이세요. 결과 폴더는 미리 만들어야 합니다. 성공하면 종료 코드 0, 실패하면 1을 반환합니다.
+Press `Ctrl+C` in the live CLI to stop input.
+The app finishes buffered audio and saves completed captions.
+Live mode needs a new output file. It never replaces an existing result at start.
 
-`doctor`는 Python 경로, Whisper·PyTorch·번역 패키지 import, FFmpeg, 실제 Tk 창 생성·종료를 검사합니다. 모델 다운로드나 음성 인식 품질은 검사하지 않습니다. `--no-gui`는 Tk 검사만 생략합니다. CLI는 Tkinter 없이도 사용할 수 있습니다.
+The first caption takes at least one chunk plus recognition time, after model loading.
+Words can be lost at chunk boundaries. Quiet speech can be skipped.
+This mode does not provide word-by-word updates or speaker labels.
 
-Tkinter 오류가 나면 `brew install python-tk@3.11` 후 `scripts/run.sh`로 실행하세요. 이 실행 스크립트는 Homebrew Tkinter의 `libexec` 경로를 연결합니다. 터미널의 `python`을 직접 쓰면 다른 Python 환경에서 실행할 수 있습니다. FFmpeg 오류는 `brew install ffmpeg`로 해결합니다. 패키지 오류는 `scripts/setup.sh`를 다시 실행하세요.
+## Data, models, and help
 
-## 개발과 검증
+The app does not send audio or transcript text to a remote service.
+Package installation and model downloads contact external servers.
+Downloaded models remain in your user cache.
+Read [data and model details](docs/user-guide.md#data-and-models) before you remove caches or share diagnostics.
 
-```bash
-.venv/bin/python -m unittest discover -s tests -v
-.venv/bin/python -m pip check
-```
+- For setup and device errors, read [Troubleshooting](docs/user-guide.md#troubleshooting).
+- For reproducible problems, [open a bug report](https://github.com/chaeyn/whisper-local-ko/issues/new/choose).
+- For code, tests, and translations, read [CONTRIBUTING.md](CONTRIBUTING.md).
+- For private security reports, read [SECURITY.md](SECURITY.md).
 
-`requirements.in`은 직접 사용하는 패키지, `requirements.txt`는 macOS Python 3.11용 고정 버전 목록입니다. 변경 시 `uv pip compile requirements.in --python-version 3.11 -o requirements.txt`로 갱신하고 설치·변환을 재확인하세요. 다른 운영체제를 위한 lock 파일은 아닙니다.
+## License and project references
 
-테스트는 한국어 저장, 영어 번역 경로, 기존 결과 보호, 원본 보호, 빈 결과·지원하지 않는 언어 처리, 긴 번역 텍스트 분할을 검사합니다. 실제 설치·모델·오디오 검증 결과는 [VALIDATION.md](VALIDATION.md)에 기록합니다. 사용자 오디오와 결과, 모델, `.venv`, 임시 검증 파일은 Git에서 제외합니다.
+Project code uses the [MIT License](LICENSE).
+Whisper and the translation model have their own licenses.
+See [model attribution](docs/user-guide.md#model-attribution) and [third-party notices](THIRD_PARTY_NOTICES.md).
 
-## 모델 출처
-
-- [OpenAI Whisper](https://github.com/openai/whisper): 코드와 모델 MIT License. FFmpeg로 오디오를 읽고 로컬에서 인식합니다.
-- [Neurora/opus-hplt-en-ko-v2.0](https://huggingface.co/Neurora/opus-hplt-en-ko-v2.0): [HPLT/translate-en-ko-v2.0-hplt_opus](https://huggingface.co/HPLT/translate-en-ko-v2.0-hplt_opus)의 Transformers 변환본, CC-BY-4.0. Marian 모델 클래스로 실행하며 검증한 revision `06f3f7b03a97728560826d7387e1ea25224c65a9`를 고정합니다.
-
-이 프로젝트 자체의 재배포 라이선스는 아직 지정하지 않았습니다. 공개 배포 시 프로젝트 라이선스를 정하고 모델·의존성의 라이선스를 함께 확인하세요.
+[Buzz and Lazygit](docs/project-references.md) informed the documentation structure and contribution guidance.
+The documents use an [ASD-STE100-inspired writing style](docs/writing-guide.md).
+This project does not claim formal STE compliance or certification.

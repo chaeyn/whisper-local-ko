@@ -1,0 +1,32 @@
+name: Bug report / 오류 보고
+description: Report a failure with steps to repeat it. / 오류 재현 절차를 작성하세요.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: 'Use English or Korean. Remove private audio, transcripts, file paths, and credentials before you submit.'
+  - type: input
+    id: environment
+    attributes:
+      label: Environment / 실행 환경
+      description: OS, CPU, Python version, and app version.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps / 재현 절차
+      description: Include the command or TUI keys. State the expected result and actual result.
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostic
+    attributes:
+      label: Diagnostic output / 진단 결과
+      description: Run whisper-ko doctor --no-gui --tui. Remove private paths.
+      render: text
+  - type: textarea
+    id: sample
+    attributes:
+      label: Public sample / 공개 샘플
+      description: If required, link audio that you have permission to share. Include its license.

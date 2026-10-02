@@ -1,0 +1,18 @@
+name: Feature request / 기능 제안
+description: Describe a task that the app does not support. / 필요한 기능을 설명하세요.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: task
+    attributes:
+      label: Task / 작업
+      description: What do you need to do? Use English or Korean.
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Expected behavior / 기대 동작
+      description: Give one example. Include the input and expected output.
+    validations:
+      required: true

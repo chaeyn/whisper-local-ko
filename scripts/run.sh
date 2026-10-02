@@ -1,14 +1,15 @@
 #!/bin/bash
 set -euo pipefail
-cd "$(dirname "$0")/.."
-if [[ ! -x .venv/bin/python ]]; then
-  echo '설치가 필요합니다: ./scripts/setup.sh' >&2
+project_dir="$(cd "$(dirname "$0")/.." && pwd)"
+if [[ ! -x "$project_dir/.venv/bin/python" ]]; then
+  echo 'Install the app with scripts/setup.sh. See README.md.' >&2
   exit 1
 fi
 if command -v brew >/dev/null; then
-  tk_prefix="$(brew --prefix python-tk@3.11 2>/dev/null || true)"
+  python_version="$("$project_dir/.venv/bin/python" -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')"
+  tk_prefix="$(brew --prefix "python-tk@$python_version" 2>/dev/null || true)"
   if [[ -d "$tk_prefix/libexec" ]]; then
     export PYTHONPATH="$tk_prefix/libexec${PYTHONPATH:+:$PYTHONPATH}"
   fi
 fi
-exec .venv/bin/python whisper_m4a.py "$@"
+exec "$project_dir/.venv/bin/python" "$project_dir/whisper_m4a.py" "$@"

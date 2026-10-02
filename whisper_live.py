@@ -1,13 +1,11 @@
-"""Local microphone captions using FFmpeg AVFoundation and chunked Whisper."""
+"""Local microphone captions using FFmpeg and chunked Whisper."""
 from __future__ import annotations
 
 import argparse
 import contextlib
-import fcntl
 import os
 from pathlib import Path
 import queue
-import re
 import signal
 import subprocess
 import tempfile
@@ -15,16 +13,9 @@ import threading
 import time
 from datetime import datetime
 
+from whisper_platform import audio_devices, audio_input_arguments, model_download_lock
+
 RATE = 16000
-
-
-def audio_devices():
-    result = subprocess.run(['ffmpeg', '-hide_banner', '-f', 'avfoundation', '-list_devices', 'true', '-i', ''],
-                            capture_output=True, text=True, timeout=15)
-    audio = result.stderr.split('AVFoundation audio devices:', 1)
-    if len(audio) != 2:
-        raise RuntimeError('Could not list microphones. Check FFmpeg and macOS permissions.')
-    return re.findall(r'\[(\d+)\] (.+)', audio[1])
 
 
 class AudioCapture:
@@ -35,15 +26,33 @@ class AudioCapture:
         self.error = None
         self.size = int(RATE * seconds) * 4
         self.lock = threading.Lock()
-        self.stderr = tempfile.TemporaryFile()
+        self.closing = threading.Event()
+        self.closed = False
         command = ['ffmpeg', '-nostdin', '-hide_banner', '-loglevel', 'error']
-        command += ['-re', '-i', str(source)] if source else ['-f', 'avfoundation', '-i', f'none:{device}']
+        command += ['-re', '-i', str(source)] if source else audio_input_arguments(device)
         command += ['-vn', '-ac', '1', '-ar', str(RATE), '-f', 'f32le', 'pipe:1']
-        self.process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=self.stderr)
+        self.stderr = tempfile.TemporaryFile()
+        try:
+            self.process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=self.stderr)
+        except BaseException as exc:
+            self.stderr.close()
+            if isinstance(exc, FileNotFoundError):
+                raise RuntimeError('FFmpeg was not found. Install FFmpeg and add it to PATH.') from exc
+            raise
         self.thread = threading.Thread(target=self.read, daemon=True)
-        self.thread.start()
         self.watcher = threading.Thread(target=self.watch, daemon=True)
-        self.watcher.start()
+        try:
+            self.thread.start()
+            self.watcher.start()
+        except BaseException:
+            self.closing.set()
+            self.halt()
+            self.finished.set()
+            if self.thread.ident is not None:
+                self.thread.join(timeout=5)
+            self.process.stdout.close()
+            self.stderr.close()
+            raise
 
     def watch(self):
         while not self.finished.wait(0.1):
@@ -54,7 +63,10 @@ class AudioCapture:
     def halt(self):
         with self.lock:
             if self.process.poll() is None:
-                self.process.terminate()
+                try:
+                    self.process.terminate()
+                except ProcessLookupError:
+                    return
                 try:
                     self.process.wait(timeout=3)
                 except subprocess.TimeoutExpired:
@@ -70,24 +82,31 @@ class AudioCapture:
                 try:
                     self.chunks.put_nowait(block)
                 except queue.Full:
-                    self.error = 'Recognition is slower than capture. Recording stopped to avoid unbounded delay; some audio was not processed. Use tiny/base or a longer chunk.'
+                    self.error = 'Recognition is slower than capture. Recording stopped; some audio was not processed. Select tiny or base. You can also increase the chunk length.'
                     self.halt()
                     break
             code = self.process.wait()
-            if code and not self.stop.is_set() and not self.error:
+            if code and not self.stop.is_set() and not self.closing.is_set() and not self.error:
                 self.stderr.seek(0)
-                detail = self.stderr.read().decode(errors='replace')[-1200:]
-                self.error = 'Audio input failed. Check microphone permission in macOS and the device selection. ' + detail
+                detail = self.stderr.read().decode('utf-8', errors='replace')[-1200:]
+                self.error = 'Audio input failed. Check FFmpeg, audio access, and the selected input. ' + detail
+        except (OSError, ValueError) as exc:
+            if not self.stop.is_set() and not self.closing.is_set():
+                self.error = f'Could not read audio input: {exc}'
         finally:
             self.finished.set()
 
     def close(self):
+        if self.closed:
+            return
+        self.closing.set()
         self.halt()
         self.thread.join(timeout=5)
         self.finished.set()
         self.watcher.join(timeout=2)
         self.process.stdout.close()
         self.stderr.close()
+        self.closed = True
 
 
 def run_live(output: Path, model_size='tiny', language='ko', device='default', seconds=6,
@@ -108,11 +127,8 @@ def run_live(output: Path, model_size='tiny', language='ko', device='default', s
     if stop.is_set():
         return '', ''
     emit('progress', ('Loading Whisper', None, None))
-    emit('status', 'Loading Whisper before opening the microphone...')
-    cache = Path(os.getenv('XDG_CACHE_HOME', str(Path.home() / '.cache'))) / 'whisper'
-    cache.mkdir(parents=True, exist_ok=True)
-    with (cache / f'.{model_size}.download.lock').open('a') as lock:
-        fcntl.flock(lock, fcntl.LOCK_EX)
+    emit('status', 'Loading Whisper before opening the audio input...')
+    with model_download_lock(model_size) as cache:
         model = whisper.load_model(model_size, device='cpu', download_root=str(cache))
     translator = None
     if stop.is_set():
@@ -123,10 +139,18 @@ def run_live(output: Path, model_size='tiny', language='ko', device='default', s
     if stop.is_set():
         return '', ''
     # Reserve a new output; subsequent atomic writes belong to this session.
-    with output.open('x', encoding='utf-8'):
-        pass
+    with output.open('x', encoding='utf-8') as reserved:
+        reservation = os.fstat(reserved.fileno())
     parts = []
-    capture = AudioCapture(device, source, seconds, stop)
+    try:
+        capture = AudioCapture(device, source, seconds, stop)
+    except BaseException:
+        # Remove only this session's empty reservation if startup fails.
+        with contextlib.suppress(OSError):
+            current = output.stat()
+            if (current.st_dev, current.st_ino, current.st_size) == (reservation.st_dev, reservation.st_ino, 0):
+                output.unlink()
+        raise
     emit('status', f'Listening in {seconds:g}s chunks. x: stop and finish buffered audio.')
     emit('progress', ('Live captions', None, None))
     count = 0
@@ -175,7 +199,7 @@ def live_worker(events, stop, output, model_size, language, device, source=None)
         raise KeyboardInterrupt
     signal.signal(signal.SIGTERM, terminate)
     try:
-        with open(os.devnull, 'w') as sink, contextlib.redirect_stdout(sink), contextlib.redirect_stderr(sink):
+        with open(os.devnull, 'w', encoding='utf-8') as sink, contextlib.redirect_stdout(sink), contextlib.redirect_stderr(sink):
             result = run_live(Path(output), model_size, language, device, stop=stop, source=source,
                               emit=lambda kind, payload: events.put((kind, payload)))
         events.put(('success', result))
@@ -186,9 +210,9 @@ def live_worker(events, stop, output, model_size, language, device, source=None)
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(prog='whisper_m4a.py live', description='Local microphone captions in Korean. Ctrl+C stops recording and finishes buffered audio.')
+    parser = argparse.ArgumentParser(prog='whisper-ko live', description='Local microphone captions in Korean. Ctrl+C stops recording and finishes buffered audio.')
     parser.add_argument('--list-devices', action='store_true')
-    parser.add_argument('--device', default='default', help='AVFoundation microphone index or name')
+    parser.add_argument('--device', default='default', help='Input from --list-devices. Default: system input on macOS/Linux; first input on Windows')
     parser.add_argument('--model', choices=('tiny','base','small','medium','large'), default='tiny')
     parser.add_argument('--language', choices=('ko','en','auto'), default='ko')
     parser.add_argument('--chunk-seconds', type=float, default=6)

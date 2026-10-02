@@ -23,12 +23,13 @@ class TuiTests(unittest.TestCase):
     def test_path_input_handles_quotes_spaces_and_home(self):
         self.assertEqual(parse_path(f'"{self.source}"'), self.source)
         self.assertEqual(parse_path(str(self.source)), self.source)
-        self.assertEqual(parse_path(str(self.source).replace(' ', '\\ ')), self.source)
+        if __import__('sys').platform != 'win32':
+            self.assertEqual(parse_path(str(self.source).replace(' ', '\\ ')), self.source)
         self.assertEqual(parse_path('~/file.m4a'), Path.home() / 'file.m4a')
 
     def test_existing_output_requires_confirmation(self):
         output = self.source.with_suffix('.ko.txt')
-        output.write_text('기존')
+        output.write_text('기존', encoding="utf-8")
         with patch.object(self.ui, 'launch') as launch:
             self.ui.start()
             self.assertEqual(self.ui.confirm, 'overwrite')
@@ -38,7 +39,7 @@ class TuiTests(unittest.TestCase):
             self.ui.start()
             self.ui.key('y')
             launch.assert_called_once_with(True)
-        self.assertEqual(output.read_text(), '기존')
+        self.assertEqual(output.read_text(encoding="utf-8"), '기존')
 
     def test_missing_file_can_retry(self):
         self.ui.fields[0] = str(self.source.parent / 'missing.m4a')
@@ -96,6 +97,17 @@ class TuiTests(unittest.TestCase):
         events.close.assert_called_once()
         self.assertIsNone(self.ui.process)
 
+    def test_cleanup_stops_live_capture_before_terminating_worker(self):
+        process = self.ui.process = Mock()
+        process.is_alive.side_effect = [True, False]
+        self.ui.live = True
+        self.ui.live_stop = Mock()
+        self.ui.stop_worker()
+        self.ui.live_stop.set.assert_called_once_with()
+        process.join.assert_any_call(timeout=5)
+        process.terminate.assert_not_called()
+        process.close.assert_called_once_with()
+
     def test_original_output_is_rejected(self):
         self.ui.fields[1] = str(self.source)
         self.ui.start()
@@ -103,7 +115,7 @@ class TuiTests(unittest.TestCase):
         self.context.Process.assert_not_called()
 
     def test_browser_filters_audio_and_selects_file(self):
-        (self.source.parent / 'notes.txt').write_text('내용')
+        (self.source.parent / 'notes.txt').write_text('내용', encoding="utf-8")
         self.ui.key('b')
         self.assertTrue(self.ui.browsing)
         self.assertNotIn('notes.txt', [entry.name for entry in self.ui.entries])
@@ -149,17 +161,55 @@ class TuiTests(unittest.TestCase):
 
     def test_live_rejects_existing_output(self):
         output = self.source.with_suffix('.ko.txt')
-        output.write_text('기존')
+        output.write_text('기존', encoding="utf-8")
         self.ui.fields[1] = str(output)
         self.ui.key('v')
         self.context.Process.assert_not_called()
-        self.assertEqual(output.read_text(), '기존')
+        self.assertEqual(output.read_text(encoding="utf-8"), '기존')
 
     def test_draw_handles_small_and_large_terminals(self):
         for dimensions in [(8, 25), (24, 80), (40, 120)]:
             self.ui.screen.getmaxyx.return_value = dimensions
             self.ui.draw()
         self.ui.screen.refresh.assert_called()
+
+
+    def test_windows_quoted_path_preserves_backslashes(self):
+        raw = r"C:\Users\name\Audio files\회의.mp3"
+        with patch("whisper_tui.sys.platform", "win32"), patch("whisper_tui.Path") as path:
+            parse_path('"' + raw + '"')
+        path.assert_called_once_with(raw)
+
+    def test_invalid_path_input_does_not_select_current_folder(self):
+        for text in ("", "  ", '""'):
+            with self.subTest(text=text), self.assertRaises(ValueError):
+                parse_path(text)
+
+    def test_replay_uses_the_selected_file(self):
+        with patch.object(self.ui, "start_live") as start:
+            self.ui.key("r")
+        start.assert_called_once_with(str(self.source))
+
+    def test_missing_replay_file_does_not_start_capture(self):
+        self.ui.fields[0] = str(self.source.parent / "missing.wav")
+        with patch.object(self.ui, "start_live") as start:
+            self.ui.key("r")
+        start.assert_not_called()
+        self.assertTrue(self.ui.status.startswith("Error:"))
+
+    def test_named_device_is_passed_to_live_worker(self):
+        self.ui.device = "Microphone (USB Audio)"
+        self.ui.key("v")
+        arguments = self.context.Process.call_args.kwargs["args"]
+        self.assertEqual(arguments[-2], "Microphone (USB Audio)")
+        self.assertIsNone(arguments[-1])
+
+    def test_default_and_named_devices_cycle(self):
+        with patch("whisper_live.audio_devices", return_value=[("USB microphone", "USB microphone")]):
+            self.ui.key("d")
+            self.assertEqual(self.ui.device, "USB microphone")
+            self.ui.key("d")
+            self.assertEqual(self.ui.device, "default")
 
 
 if __name__ == '__main__':

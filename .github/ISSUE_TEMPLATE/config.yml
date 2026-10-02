@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Security report / 보안 문제
+    url: https://github.com/chaeyn/whisper-local-ko/security/advisories/new
+    about: Send security details in a private report. / 보안 문제는 비공개로 보고하세요.
