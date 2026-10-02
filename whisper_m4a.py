@@ -70,9 +70,37 @@ def save_transcript(output: Path, text: str, overwrite: bool = False) -> None:
             temporary.unlink(missing_ok=True)
 
 
+def transcribe_with_progress(model, file_path, language, progress=None):
+    if progress is None:
+        return model.transcribe(str(file_path), language=language, task="transcribe", fp16=False)
+    # Whisper reports completed audio frames through its local tqdm bar.
+    # This hook is used only by the TUI's isolated conversion process.
+    from types import SimpleNamespace
+    from tqdm import tqdm
+    module = importlib.import_module("whisper.transcribe")
+
+    class AudioProgress(tqdm):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            self.completed_frames = 0
+            progress("Transcribing", 0, self.total)
+
+        def update(self, amount=1):
+            self.completed_frames += amount
+            progress("Transcribing", min(self.completed_frames, self.total), self.total)
+            return super().update(amount)
+
+    original_tqdm = module.tqdm
+    module.tqdm = SimpleNamespace(tqdm=AudioProgress)
+    try:
+        return model.transcribe(str(file_path), language=language, task="transcribe", fp16=False)
+    finally:
+        module.tqdm = original_tqdm
+
+
 def transcribe_file(file_path: Path, model_size: str = "small", language: str | None = None,
                     output: Path | None = None, overwrite: bool = False,
-                    status=print) -> tuple[str, Path]:
+                    status=print, progress=None) -> tuple[str, Path]:
     file_path = file_path.expanduser().resolve()
     if not file_path.is_file():
         raise ValueError(f"오디오 파일을 찾을 수 없습니다: {file_path}")
@@ -86,6 +114,8 @@ def transcribe_file(file_path: Path, model_size: str = "small", language: str | 
     if not shutil.which("ffmpeg"):
         raise RuntimeError("FFmpeg가 없습니다. brew install ffmpeg를 실행하세요.")
     import whisper
+    if progress:
+        progress("Loading Whisper", None, None)
     status("Whisper 모델을 불러옵니다. 첫 사용은 다운로드가 필요합니다.")
     cache = Path(os.getenv("XDG_CACHE_HOME", str(Path.home() / ".cache"))) / "whisper"
     cache.mkdir(parents=True, exist_ok=True)
@@ -93,7 +123,7 @@ def transcribe_file(file_path: Path, model_size: str = "small", language: str | 
         fcntl.flock(lock, fcntl.LOCK_EX)
         model = whisper.load_model(model_size, device="cpu", download_root=str(cache))
     status("음성을 받아쓰고 있습니다.")
-    result = model.transcribe(str(file_path), language=language, task="transcribe", fp16=False)
+    result = transcribe_with_progress(model, file_path, language, progress)
     recognized = result["text"].strip()
     spoken = result.get("language")
     if not recognized:
@@ -102,9 +132,14 @@ def transcribe_file(file_path: Path, model_size: str = "small", language: str | 
         transcript = recognized
     elif spoken == "en":
         status("영한 번역 모델을 불러옵니다. 첫 사용은 다운로드가 필요합니다.")
-        transcript = EnglishToKoreanTranslator().translate(recognized)
+        if progress:
+            progress("Loading translation model", None, None)
+        translator = EnglishToKoreanTranslator()
+        transcript = translator.translate(recognized, progress=progress) if progress else translator.translate(recognized)
     else:
         raise ValueError(f"감지한 언어: {spoken}. 한국어와 영어 음성만 지원합니다. 음성 언어를 직접 선택해 보세요.")
+    if progress:
+        progress("Saving", None, None)
     save_transcript(output, transcript, overwrite)
     return transcript, output
 
@@ -130,11 +165,13 @@ class EnglishToKoreanTranslator:
         self.model = MarianMTModel.from_pretrained(TRANSLATION_MODEL, revision=TRANSLATION_REVISION, token=False)
         self.model.eval()
 
-    def translate(self, text: str) -> str:
+    def translate(self, text: str, progress=None) -> str:
         import torch
 
         chunks = self._split_into_chunks(text)
         translated: list[str] = []
+        if progress:
+            progress("Translating", 0, len(chunks))
         for start in range(0, len(chunks), 4):
             batch_text = chunks[start : start + 4]
             inputs = self.tokenizer(
@@ -154,6 +191,8 @@ class EnglishToKoreanTranslator:
                 self.tokenizer.decode(ids, skip_special_tokens=True).strip()
                 for ids in output_ids
             )
+            if progress:
+                progress("Translating", min(start + len(batch_text), len(chunks)), len(chunks))
         return "\n".join(part for part in translated if part)
 
     def _split_into_chunks(self, text: str) -> list[str]:

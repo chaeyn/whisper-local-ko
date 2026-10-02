@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import Mock, patch
 
-from whisper_tui import Tui, parse_path, wrap_cells, convert_worker
+from whisper_tui import Tui, parse_path, wrap_cells, convert_worker, progress_bar
 
 
 class TuiTests(unittest.TestCase):
@@ -128,6 +128,13 @@ class TuiTests(unittest.TestCase):
         self.ui.process = Mock()
         self.ui.key('b')
         self.assertFalse(self.ui.browsing)
+
+    def test_progress_bar_reports_measured_stage_fraction(self):
+        self.assertIn('50%', progress_bar(('Transcribing', 50, 100)))
+        self.assertIn('100%', progress_bar(('Done', 1, 1)))
+        loading = progress_bar(('Loading Whisper', None, None), busy=True)
+        self.assertIn('>>>', loading)
+        self.assertNotIn('%', loading)
 
     def test_draw_handles_small_and_large_terminals(self):
         for dimensions in [(8, 25), (24, 80), (40, 120)]:

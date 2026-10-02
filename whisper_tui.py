@@ -10,6 +10,7 @@ import queue
 import shlex
 import sys
 import unicodedata
+import time
 from pathlib import Path
 
 from whisper_m4a import LANGUAGES, MODELS
@@ -89,10 +90,24 @@ def convert_worker(events, source: str, model: str, language: str | None,
     try:
         with open(os.devnull, "w") as sink, contextlib.redirect_stdout(sink), contextlib.redirect_stderr(sink):
             text, saved = transcribe_file(Path(source), model, language, Path(output), overwrite,
-                                         status=lambda message: events.put(("status", english_message(message))))
+                                         status=lambda message: events.put(("status", english_message(message))),
+                                         progress=lambda stage, done, total: events.put(("progress", (stage, done, total))))
         events.put(("success", (text, str(saved))))
     except Exception as exc:
         events.put(("error", english_message(str(exc))))
+
+
+def progress_bar(progress, width=24, busy=False):
+    stage, done, total = progress
+    if done is not None and total and total > 0:
+        ratio = max(0.0, min(1.0, done / total))
+        filled = int(width * ratio)
+        return f"[{('#' * filled).ljust(width, '-')}] {ratio:5.0%} {stage}"
+    if busy:
+        position = int(time.monotonic() * 6) % max(1, width - 3)
+        bar = '-' * position + '>>>' + '-' * (width - position - 3)
+        return f"[{bar}] {stage}"
+    return f"[{'-' * width}] {stage}"
 
 
 class Tui:
@@ -104,6 +119,7 @@ class Tui:
         self.language = 0
         self.model = MODELS.index("small")
         self.status = "Select an audio file. Results are saved in Korean."
+        self.progress = ("Ready", None, None)
         self.result = ""
         self.saved = ""
         self.scroll = 0
@@ -158,6 +174,7 @@ class Tui:
 
     def launch(self, overwrite):
         self.result, self.saved, self.scroll = "", "", 0
+        self.progress = ("Starting", None, None)
         self.status = "Starting conversion. The first model download may take a while."
         self.process = self.context.Process(target=convert_worker, args=(self.events, *self.pending, overwrite), daemon=True)
         try:
@@ -175,10 +192,14 @@ class Tui:
                 break
             if kind == "status":
                 self.status = payload
+            elif kind == "progress":
+                self.progress = payload
             elif kind == "success":
                 self.result, self.saved = payload
+                self.progress = ("Done", 1, 1)
                 self.status = "Done. Result saved. Use Up/Down or PgUp/PgDn to read."
             else:
+                self.progress = ("Failed", None, None)
                 self.status = f"Error: {payload} Check the path/settings and press s to retry."
         if self.process is not None and not self.process.is_alive():
             self.process.join()
@@ -340,6 +361,7 @@ class Tui:
             status = wrap_cells(self.status, width - 2)
             put(13, status[0])
             put(14, status[1] if len(status) > 1 else "")
+            put(12, progress_bar(self.progress, max(8, min(24, width - 35)), self.busy))
             put(15, f"Saved: {self.saved}" if self.saved else "Result")
             lines = wrap_cells(self.result or "The Korean result will appear here.", width - 2)
             room = height - 20

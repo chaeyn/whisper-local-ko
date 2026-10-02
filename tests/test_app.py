@@ -64,6 +64,22 @@ class ConversionTests(unittest.TestCase):
         self.assertFalse(output.exists())
         self.assertFalse(list(output.parent.glob('.whisper-*')))
 
+    def test_whisper_progress_tracks_disabled_bar_and_restores_hook(self):
+        import importlib
+        module = importlib.import_module('whisper.transcribe')
+        original = module.tqdm
+        events = []
+        class Model:
+            def transcribe(self, *args, **kwargs):
+                with module.tqdm.tqdm(total=100, disable=True) as bar:
+                    bar.update(40)
+                    bar.update(60)
+                return {'text': '한국어'}
+        result = app.transcribe_with_progress(Model(), self.audio, 'ko', lambda *event: events.append(event))
+        self.assertEqual([event[1] for event in events], [0, 40, 100])
+        self.assertEqual(result['text'], '한국어')
+        self.assertIs(module.tqdm, original)
+
     def test_public_translation_model_ignores_inherited_credentials(self):
         transformers = Mock()
         with patch.dict('sys.modules', {'transformers': transformers}):
