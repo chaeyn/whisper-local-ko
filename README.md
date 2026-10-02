@@ -36,10 +36,8 @@ Physical microphone capture is not verified for this release.
 
 ## Install
 
-Install Git, Python 3.11 or 3.12, and FFmpeg first.
-The setup script creates a local `.venv` and installs the Python package.
-On macOS and Linux, use `--run` to open the TUI after installation.
-For installation only, use `sh scripts/setup.sh`. Start the app later with `sh scripts/run.sh`.
+Install Python 3.11 or 3.12 and FFmpeg first.
+Use the GitHub release installer on macOS or Linux. Git is not required.
 The first model download needs an internet connection and free disk space.
 
 ### macOS
@@ -47,77 +45,93 @@ The first model download needs an internet connection and free disk space.
 Install [Homebrew](https://brew.sh/) if it is absent.
 Run these commands:
 
-```bash
+```sh
 brew install python@3.11 python-tk@3.11 ffmpeg
-git clone https://github.com/chaeyn/whisper-local-ko.git
-cd whisper-local-ko
-sh scripts/setup.sh --run
+curl -fsSL https://github.com/chaeyn/whisper-local-ko/releases/latest/download/install.sh | sh -s -- --run
 ```
 
 ### Linux
 
 For Ubuntu 24.04, run these commands:
 
-```bash
+```sh
 sudo apt update
-sudo apt install git python3 python3-venv python3-tk ffmpeg pulseaudio-utils
-git clone https://github.com/chaeyn/whisper-local-ko.git
-cd whisper-local-ko
-sh scripts/setup.sh --run
+sudo apt install curl python3 python3-venv python3-tk ffmpeg pulseaudio-utils
+curl -fsSL https://github.com/chaeyn/whisper-local-ko/releases/latest/download/install.sh | sh -s -- --run
 ```
 
 For another distribution, install the equivalent packages.
 Check that `python3 --version` reports 3.11 or 3.12.
-The setup script does not install Linux system packages.
+The installer does not install system packages.
+
+The installer downloads a versioned source archive from GitHub Releases.
+It verifies the archive against the release's SHA-256 checksum before installation.
+It installs under `~/.local/share/whisper-local-ko` and creates `~/.local/bin/whisper-ko`.
+It opens the TUI when `--run` is present. Omit `--run` to install only.
+To start the app later, run:
+
+```sh
+"$HOME/.local/bin/whisper-ko"
+```
+
+The installer keeps the previous installation if the new installation fails.
+It does not edit your shell profile.
+See the [user guide](docs/user-guide.md#release-installer-options) for custom paths, updates, and removal.
 
 ### Windows
 
 Use PowerShell. Install the prerequisites:
 
 ```powershell
-winget install --exact --id Git.Git
 winget install --exact --id Python.Python.3.11
 winget install --exact --id Gyan.FFmpeg
 ```
 
-Open a new PowerShell window. Run these commands:
+Open a new PowerShell window. Install the release package:
 
 ```powershell
-git clone https://github.com/chaeyn/whisper-local-ko.git
-cd whisper-local-ko
-powershell -ExecutionPolicy Bypass -File .\scripts\setup.ps1
-powershell -ExecutionPolicy Bypass -File .\scripts\run.ps1
+$WhisperVenv = Join-Path $env:LOCALAPPDATA "whisper-local-ko\.venv"
+py -3.11 -m venv "$WhisperVenv"
+& "$WhisperVenv\Scripts\python.exe" -m pip install --upgrade pip
+& "$WhisperVenv\Scripts\python.exe" -m pip install torch==2.8.0 --index-url https://download.pytorch.org/whl/cpu
+& "$WhisperVenv\Scripts\python.exe" -m pip install https://github.com/chaeyn/whisper-local-ko/releases/download/v0.1.2/whisper_local_ko-0.1.2-py3-none-any.whl
+& "$WhisperVenv\Scripts\whisper-ko.exe" doctor --no-gui --tui
+& "$WhisperVenv\Scripts\whisper-ko.exe"
 ```
 
-These commands set the execution policy for the script process only.
-They do not change the saved system policy.
-For Python 3.12, add `-PythonVersion 3.12` to the setup command.
+For Python 3.12, replace `-3.11` with `-3.12`.
+These commands use the release wheel. Git and environment activation are not required.
+To start the app in a new PowerShell window, run:
+
+```powershell
+& "$env:LOCALAPPDATA\whisper-local-ko\.venv\Scripts\whisper-ko.exe"
+```
 
 ### Use an existing Python environment
 
 Use a virtual environment with Python 3.11 or 3.12.
 On Linux and Windows, install the CPU build of PyTorch first:
 
-```bash
+```sh
 python -m pip install torch==2.8.0 --index-url https://download.pytorch.org/whl/cpu
 ```
 
-Then run these commands from the repository folder:
+Then install the wheel from GitHub Releases:
 
-```bash
-python -m pip install .
+```sh
+python -m pip install https://github.com/chaeyn/whisper-local-ko/releases/download/v0.1.2/whisper_local_ko-0.1.2-py3-none-any.whl
 whisper-ko doctor --no-gui --tui
 whisper-ko
 ```
 
 The package name is `whisper-local-ko`. The command name is `whisper-ko`.
-This repository installation does not require a PyPI release.
-See the [user guide](docs/user-guide.md) for environment activation and removal.
+This method works on each supported OS and does not require a PyPI release.
+For source installation and development, read [CONTRIBUTING.md](CONTRIBUTING.md#set-up-a-development-environment).
 
 ## Convert a file
 
-Run the TUI with `sh scripts/run.sh` on macOS or Linux.
-On Windows, use the `run.ps1` command above.
+Run `"$HOME/.local/bin/whisper-ko"` on macOS or Linux.
+On Windows, use the installed executable shown above.
 
 1. Press `b` to open the file browser.
 2. Select an audio file.
@@ -149,8 +163,9 @@ The [user guide](docs/user-guide.md) describes path editing, file selection, pro
 
 ## Use the CLI or GUI
 
-The examples below use `whisper-ko` in an active virtual environment.
-You can also pass the same arguments to the run script.
+The examples below use `whisper-ko` on `PATH`.
+You can pass the same arguments to the full executable path shown above.
+See [Commands and environments](docs/user-guide.md#commands-and-environments) to set `PATH` for the current terminal.
 
 ```bash
 whisper-ko transcribe "meeting.m4a" --language ko --model small

@@ -7,7 +7,7 @@ if (-not (Get-Command ffmpeg -ErrorAction SilentlyContinue)) {
 }
 if (Test-Path '.venv') {
     if (-not (Test-Path '.venv\Scripts\python.exe')) { throw 'Rename the incompatible .venv, then try again.' }
-    & .venv\Scripts\python.exe -c 'import sys; assert (3, 11) <= sys.version_info[:2] <= (3, 12)'
+    & .venv\Scripts\python.exe -c 'import sys; sys.exit(0 if (3, 11) <= sys.version_info[:2] <= (3, 12) else 1)'
     if ($LASTEXITCODE -ne 0) { throw 'Rename the incompatible .venv, then try again.' }
 } else {
     & py "-$PythonVersion" -m venv .venv

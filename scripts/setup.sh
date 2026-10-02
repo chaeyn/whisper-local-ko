@@ -18,7 +18,7 @@ elif [ "$(uname -s)" = Darwin ] && command -v brew >/dev/null && brew --prefix p
 else
   python_bin=python3
 fi
-if ! "$python_bin" -c 'import sys; assert (3, 11) <= sys.version_info[:2] <= (3, 12)' 2>/dev/null; then
+if ! "$python_bin" -c 'import sys; sys.exit(0 if (3, 11) <= sys.version_info[:2] <= (3, 12) else 1)' 2>/dev/null; then
   echo 'Install Python 3.11 or 3.12. See README.md. Set WHISPER_PYTHON to select its path.' >&2
   exit 1
 fi
@@ -30,7 +30,7 @@ if ! command -v ffmpeg >/dev/null; then
   echo 'Install FFmpeg and add it to PATH. See README.md for your operating system.' >&2
   exit 1
 fi
-if [ -e .venv ] && ! .venv/bin/python -c 'import sys; assert (3, 11) <= sys.version_info[:2] <= (3, 12)' 2>/dev/null; then
+if [ -e .venv ] && ! .venv/bin/python -c 'import sys; sys.exit(0 if (3, 11) <= sys.version_info[:2] <= (3, 12) else 1)' 2>/dev/null; then
   echo 'The existing .venv is incompatible. Rename it, then run this script again.' >&2
   exit 1
 fi

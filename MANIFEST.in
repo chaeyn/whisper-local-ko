@@ -1,3 +1,4 @@
+include install.sh
 include README.ko.md CONTRIBUTING.md CONTRIBUTING.ko.md SECURITY.md CODE_OF_CONDUCT.md CHANGELOG.md VALIDATION.md
 include requirements.in requirements.txt
 recursive-include docs *.md

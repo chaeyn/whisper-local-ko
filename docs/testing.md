@@ -14,7 +14,7 @@ python -m unittest discover -s tests -v
 python -m pip check
 python -m ruff check .
 python -m build
-python -m twine check dist/*
+python -m twine check dist/*.whl dist/*.tar.gz
 python scripts/check_docs.py
 ```
 
@@ -51,12 +51,49 @@ Record the model name, translation revision, sample source, and observed errors.
 
 ## Package installation
 
-Build a wheel from the intended release commit.
+Build and prepare the assets from the intended release commit:
+
+```sh
+python -m build
+python -m twine check dist/*.whl dist/*.tar.gz
+python scripts/prepare_release.py
+```
+
+Check the wheel, source archive, version-matched `install.sh`, and `SHA256SUMS.txt` in `dist/`.
+The manifest covers the wheel, source archive, and installer.
+The preparation script does not publish these files.
+
 Create a clean Python 3.11 or 3.12 environment outside the source tree.
 Install that wheel with its dependencies.
 Run the installed command from a different directory.
 Check version, help, `doctor --no-gui --tui`, and a file conversion.
 This catches missing package files and accidental source-tree imports.
+
+## Release installer checks
+
+Test the standalone `install.sh` separately from source setup.
+Use a temporary prefix and launcher folder so the test preserves the user's installed app.
+
+Check these paths before publication:
+
+- Parse the script with `sh -n` and `dash -n`.
+- Read `--help` with `sh`, `dash`, and piped script input.
+- Install into a path with spaces without a Git checkout.
+- Verify the source archive checksum before setup runs.
+- Reject a mismatched checksum and unsafe archive paths.
+- Keep the previous launcher and installation when download or setup fails.
+- Keep an unrelated file at the requested launcher path.
+- Replace a managed launcher only after the new installation passes its checks.
+- Run the launcher from outside the installation folder and check relative input paths.
+- Confirm that installation does not edit shell profiles.
+- Use a real terminal to test piped installation with `--run` and TUI exit.
+- Confirm that `--run` without a terminal reports the launch error and keeps the completed installation.
+
+After publication, run the documented commands against the GitHub release assets.
+Check both the versioned installer URL and the `releases/latest/download/install.sh` URL.
+Test the release wheel URL in a fresh Windows environment.
+Record each environment, resolved release version, commands, and result.
+Tests with simulated downloads do not prove that published assets are available.
 
 ## Terminal and GUI checks
 
@@ -101,6 +138,12 @@ The workflow targets macOS ARM64, Linux x86_64, and Windows x86_64.
 It checks Python 3.11 and 3.12.
 The Python 3.11 jobs also run real Korean model inference.
 CI does not verify physical microphones or desktop interactions.
+
+The [release installation workflow](../.github/workflows/release-install.yml) runs after publication.
+It downloads release assets without a repository checkout.
+It checks shell installation on macOS and Linux, and wheel installation on Windows.
+Each job uses Python 3.11 and checks the installed version and dependencies.
+Use its run conclusion to confirm the published download paths.
 
 Keep exact run links and results in [VALIDATION.md](../VALIDATION.md).
 Document failures and untested environments before publishing a release.

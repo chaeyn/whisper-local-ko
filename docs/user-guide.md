@@ -4,29 +4,40 @@
 
 ## Commands and environments
 
-Run `sh scripts/setup.sh` from the repository folder on macOS or Linux.
-Add `--run` to install and then open the TUI.
-Use `sh scripts/run.sh` to start an installed app.
-These commands do not require execute permission on the script files.
-It keeps an existing `.venv` if that environment has a supported Python version.
-If setup rejects an old environment, rename that `.venv` folder before you run setup again.
+Follow the [installation instructions](../README.md#install) for your OS.
+A release installation does not need a source checkout.
 
-On macOS and Linux, activate the environment:
+On macOS or Linux, start the app with the installed launcher:
 
-```bash
-source .venv/bin/activate
+```sh
+"$HOME/.local/bin/whisper-ko"
 ```
 
-On Windows PowerShell, activate the environment:
+To use `whisper-ko` without its full path, add the launcher folder to the current terminal's `PATH`:
+
+```sh
+export PATH="$HOME/.local/bin:$PATH"
+```
+
+The installer does not edit shell profiles.
+This command affects the current terminal and its child processes.
+For a custom `--bin-dir`, use that folder instead.
+
+On Windows PowerShell, start the app with its full path:
 
 ```powershell
-.\.venv\Scripts\Activate.ps1
+& "$env:LOCALAPPDATA\whisper-local-ko\.venv\Scripts\whisper-ko.exe"
 ```
 
-If PowerShell blocks activation, use `run.ps1` or `.\.venv\Scripts\whisper-ko.exe` directly.
-The examples below assume that the environment is active.
-The run scripts accept the same arguments and preserve your current directory.
-Relative input and output paths use that directory.
+To use `whisper-ko` in the current PowerShell window, set:
+
+```powershell
+$env:Path = "$env:LOCALAPPDATA\whisper-local-ko\.venv\Scripts;$env:Path"
+```
+
+The examples below assume that `whisper-ko` is on `PATH`.
+You can pass the same arguments to the full executable path.
+Relative input and output paths use your current directory.
 
 | Command | Purpose |
 | --- | --- |
@@ -42,6 +53,78 @@ Relative input and output paths use that directory.
 
 `doctor` does not download models or measure recognition quality.
 Success returns exit code `0`. Runtime failure returns `1`. Invalid command arguments return `2`.
+
+## Release installer options
+
+The macOS and Linux installer accepts these options:
+
+| Option | Purpose |
+| --- | --- |
+| `--run` | Open the TUI after installation |
+| `--prefix DIR` | Set the installation data folder; default: `~/.local/share/whisper-local-ko` |
+| `--bin-dir DIR` | Set the launcher folder; default: `~/.local/bin` |
+| `--help` | Show installer help |
+
+For a custom installation, run:
+
+```sh
+curl -fsSL https://github.com/chaeyn/whisper-local-ko/releases/latest/download/install.sh | sh -s -- --prefix "$HOME/Apps/whisper-local-ko" --bin-dir "$HOME/bin" --run
+```
+
+The installer selects `WHISPER_PYTHON` when you set that environment variable.
+Otherwise, it checks installed Homebrew Python versions, then Python 3.12, 3.11, and `python3` on `PATH`.
+It requires Python 3.11 or 3.12 and FFmpeg.
+
+To read the script before you run it, download the fixed release:
+
+```sh
+curl -fL https://github.com/chaeyn/whisper-local-ko/releases/download/v0.1.2/install.sh -o install.sh
+```
+
+Read `install.sh` in a text editor. Then run:
+
+```sh
+sh install.sh --run
+```
+
+The script downloads its matching source archive and `SHA256SUMS.txt` from the same release.
+It checks the source archive's checksum before extraction.
+This check detects a mismatched archive. It does not authenticate the downloaded installer script.
+
+Each installation uses a new folder under `<prefix>/releases/`.
+The installer updates the launcher after installation and dependency checks pass.
+If those steps fail, it keeps the previous launcher and installation.
+Older successful installations remain until you remove them.
+
+With `--run`, the installer opens `/dev/tty` for the TUI.
+Run that option in an interactive terminal.
+If no terminal is available, the app remains installed but the launch step fails.
+Use installation only in automation, then run the launcher from a terminal.
+
+## Source installation
+
+For development or a source checkout, follow [CONTRIBUTING.md](../CONTRIBUTING.md#set-up-a-development-environment).
+From the repository folder on macOS or Linux, run:
+
+```sh
+sh scripts/setup.sh --run
+```
+
+Omit `--run` to install only. Use `sh scripts/run.sh` to start the app later.
+These commands do not require execute permission on the script files.
+Setup keeps an existing `.venv` if it has a supported Python version.
+If setup rejects an old environment, rename that `.venv` folder before you run setup again.
+
+On Windows, run the source setup and launch scripts:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\setup.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\run.ps1
+```
+
+These commands set the execution policy for the script process only.
+For Python 3.12, add `-PythonVersion 3.12` to the setup command.
+The run scripts accept app arguments and preserve your current directory.
 
 ## File selection and path editing
 
@@ -221,14 +304,17 @@ The test audio has separate attribution in `tests/fixtures/`.
 
 | Symptom | Action |
 | --- | --- |
-| Python version error | Install Python 3.11 or 3.12. Preserve the old `.venv` by renaming it, then run setup. |
-| `whisper-ko` is not found | Activate `.venv`, or use the run script. |
+| Python version error | Install Python 3.11 or 3.12. For the shell installer, set `WHISPER_PYTHON` to the interpreter path. |
+| `whisper-ko` is not found | Use the full executable path from the installation instructions, or add its folder to `PATH`. |
 | FFmpeg is not found | Install FFmpeg. Open a new terminal if the installer changed `PATH`. |
-| Tk import error on macOS | Install the matching Homebrew `python-tk` package. Use `run.sh`. |
+| Tk import error on macOS | Install the matching Homebrew `python-tk` package. Use the installed launcher. |
 | Tk import error on Linux | Install the matching Python Tk package. |
 | No display on Linux | Use CLI/TUI. Use `doctor --no-gui --tui` for diagnosis. |
 | TUI does not open | Use an interactive terminal. Enlarge it to 60 × 24 or more. |
-| Windows curses import fails | Run setup again with the supported Python interpreter. |
+| Windows curses import fails | Install the release wheel with Python 3.11 or 3.12 using the Windows instructions. |
+| Installer checksum mismatch | Download the installer again from the intended GitHub release. Report a repeated mismatch. |
+| Installer launcher path is occupied | Select a different `--bin-dir`, or inspect the existing file before you change it. |
+| Installer cannot open `/dev/tty` | Installation is complete. Open an interactive terminal and run the printed launcher path. |
 | Result already exists | Select a new path, or explicitly confirm replacement for file conversion. |
 | First run seems slow | Wait for model download and loading. Check the network and free disk space. |
 | Empty or incorrect result | Select the speech language. Check the audio level and recording quality. |
@@ -242,18 +328,46 @@ Share only audio that you have permission to publish.
 
 ## Update or remove the app
 
-To update a source installation, keep a backup of your results.
-Pull the intended release into the repository. Run the setup script again.
-Do not overwrite your own source changes without review.
+Close the app before you update or remove it.
+Keep source audio and transcripts that you still need.
+
+### Release installer on macOS and Linux
+
+To update, run the latest installer command from the [README](../README.md#install) again.
+Use the same `--prefix` and `--bin-dir` values if you set custom paths.
+A successful installation changes the launcher to the new release folder.
+Older successful releases remain under `<prefix>/releases/`.
+
+To remove an older release, read the `whisper-ko` launcher in a text editor.
+Keep the release folder named in that file.
+Delete only older release folders that you no longer need.
+Do not move an installed release folder. Its Python environment uses its original path.
+
+To remove the full installation, delete `~/.local/bin/whisper-ko` and `~/.local/share/whisper-local-ko`.
+For custom paths, delete the launcher file and data folder that you selected.
+
+### Wheel installation
+
+To update, repeat the wheel installation command with the intended release URL.
+Use the same Python environment.
+Check `whisper-ko --version` and `whisper-ko doctor --no-gui --tui` after installation.
 
 To remove the package from an active environment, run:
 
-```bash
+```sh
 python -m pip uninstall whisper-local-ko
 ```
 
+For the Windows installation above, delete the dedicated `%LOCALAPPDATA%\whisper-local-ko` folder after the app exits.
+For another dedicated environment, delete that environment folder after the app exits.
+
+### Source installation
+
+Keep a backup of your results.
+Pull the intended release into the repository. Run the setup script again.
+Do not overwrite your own source changes without review.
 A dedicated `.venv` can be deleted after the app exits.
-Keep source audio and transcripts that you still need.
-The uninstall command does not remove models, system Python, Tk, or FFmpeg.
+
+These removal steps do not remove models, system Python, Tk, or FFmpeg.
 Remove only the model cache folders you no longer need.
 Other applications can share those caches.

@@ -4,28 +4,39 @@
 
 ## 명령과 실행 환경
 
-macOS와 Linux에서는 저장소 폴더에서 `sh scripts/setup.sh`를 실행하세요.
-설치 후 TUI를 열려면 `--run`을 붙이세요.
-설치한 앱은 `sh scripts/run.sh`로 실행하세요.
-이 명령에는 스크립트 파일의 실행 권한이 필요하지 않습니다.
-기존 `.venv`가 지원하는 Python 버전을 사용하면 해당 환경을 유지합니다.
-오래된 환경 때문에 설치가 중단되면 `.venv` 폴더 이름을 바꾼 뒤 다시 설치하세요.
+OS에 맞는 [설치 절차](../README.ko.md#설치)를 따르세요.
+릴리스 설치에는 저장소 소스가 필요하지 않습니다.
 
-macOS와 Linux에서는 다음 명령으로 가상환경을 활성화하세요.
+macOS와 Linux에서는 설치한 실행 파일을 사용하세요.
 
-```bash
-source .venv/bin/activate
+```sh
+"$HOME/.local/bin/whisper-ko"
 ```
 
-Windows PowerShell에서는 다음 명령을 사용하세요.
+전체 경로 없이 `whisper-ko`를 사용하려면 현재 터미널의 `PATH`에 실행 파일 폴더를 추가하세요.
+
+```sh
+export PATH="$HOME/.local/bin:$PATH"
+```
+
+설치 스크립트는 셸 설정 파일을 바꾸지 않습니다.
+이 명령은 현재 터미널과 여기서 시작한 프로세스에 적용됩니다.
+`--bin-dir`로 경로를 지정했다면 해당 폴더를 사용하세요.
+
+Windows PowerShell에서는 전체 경로로 실행하세요.
 
 ```powershell
-.\.venv\Scripts\Activate.ps1
+& "$env:LOCALAPPDATA\whisper-local-ko\.venv\Scripts\whisper-ko.exe"
 ```
 
-PowerShell이 활성화를 차단하면 `run.ps1`이나 `.\.venv\Scripts\whisper-ko.exe`를 직접 실행하세요.
-아래 예시는 가상환경을 활성화한 상태를 기준으로 합니다.
-실행 스크립트에도 같은 인수를 전달할 수 있습니다.
+현재 PowerShell 창에서 `whisper-ko`를 사용하려면 다음과 같이 설정하세요.
+
+```powershell
+$env:Path = "$env:LOCALAPPDATA\whisper-local-ko\.venv\Scripts;$env:Path"
+```
+
+아래 예시는 `PATH`에서 `whisper-ko`를 찾을 수 있는 상태를 기준으로 합니다.
+실행 파일 전체 경로에도 같은 인수를 전달할 수 있습니다.
 상대 입력 경로와 출력 경로는 현재 폴더를 기준으로 해석합니다.
 
 | 명령 | 용도 |
@@ -42,6 +53,78 @@ PowerShell이 활성화를 차단하면 `run.ps1`이나 `.\.venv\Scripts\whisper
 
 `doctor`는 모델을 다운로드하거나 인식 품질을 측정하지 않습니다.
 성공 시 종료 코드는 `0`입니다. 실행 오류는 `1`, 잘못된 명령 인수는 `2`입니다.
+
+## 릴리스 설치 옵션
+
+macOS와 Linux 설치 스크립트는 다음 옵션을 받습니다.
+
+| 옵션 | 용도 |
+| --- | --- |
+| `--run` | 설치 후 TUI 열기 |
+| `--prefix DIR` | 설치 데이터 폴더 지정. 기본값: `~/.local/share/whisper-local-ko` |
+| `--bin-dir DIR` | 실행 파일 폴더 지정. 기본값: `~/.local/bin` |
+| `--help` | 설치 도움말 표시 |
+
+설치 경로를 지정하려면 다음 명령을 실행하세요.
+
+```sh
+curl -fsSL https://github.com/chaeyn/whisper-local-ko/releases/latest/download/install.sh | sh -s -- --prefix "$HOME/Apps/whisper-local-ko" --bin-dir "$HOME/bin" --run
+```
+
+`WHISPER_PYTHON` 환경 변수를 설정하면 설치 스크립트는 해당 Python을 사용합니다.
+설정하지 않으면 설치된 Homebrew Python을 확인한 뒤 `PATH`의 Python 3.12, 3.11, `python3`를 확인합니다.
+Python 3.11 또는 3.12와 FFmpeg가 필요합니다.
+
+실행 전에 스크립트를 읽으려면 버전을 지정해 다운로드하세요.
+
+```sh
+curl -fL https://github.com/chaeyn/whisper-local-ko/releases/download/v0.1.2/install.sh -o install.sh
+```
+
+텍스트 편집기에서 `install.sh`를 읽으세요. 그다음 실행하세요.
+
+```sh
+sh install.sh --run
+```
+
+스크립트는 같은 릴리스에서 해당 버전의 소스 압축 파일과 `SHA256SUMS.txt`를 받습니다.
+압축을 풀기 전에 소스 압축 파일의 체크섬을 확인합니다.
+이 검사는 파일 불일치를 찾습니다. 다운로드한 설치 스크립트 자체의 진위는 확인하지 않습니다.
+
+설치할 때마다 `<prefix>/releases/` 아래에 새 폴더를 만듭니다.
+설치와 의존성 검사를 통과하면 실행 파일을 새 설치로 연결합니다.
+해당 단계가 실패하면 기존 실행 파일과 설치를 유지합니다.
+이전에 설치를 완료한 버전은 직접 지울 때까지 남습니다.
+
+`--run`을 사용하면 설치 스크립트는 TUI 입력을 위해 `/dev/tty`를 엽니다.
+이 옵션은 대화형 터미널에서 사용하세요.
+터미널이 없으면 설치는 유지하지만 실행 단계는 실패합니다.
+자동 작업에서는 설치만 한 뒤 터미널에서 실행 파일을 여세요.
+
+## 소스 설치
+
+개발하거나 저장소 소스를 사용하려면 [CONTRIBUTING.ko.md](../CONTRIBUTING.ko.md#개발-환경-준비)를 따르세요.
+macOS와 Linux에서는 저장소 폴더에서 다음 명령을 실행하세요.
+
+```sh
+sh scripts/setup.sh --run
+```
+
+설치만 하려면 `--run`을 빼세요. 나중에 실행할 때는 `sh scripts/run.sh`를 사용하세요.
+이 명령에는 스크립트 파일의 실행 권한이 필요하지 않습니다.
+기존 `.venv`가 지원하는 Python 버전을 사용하면 해당 환경을 유지합니다.
+오래된 환경 때문에 설치가 중단되면 `.venv` 폴더 이름을 바꾼 뒤 다시 설치하세요.
+
+Windows에서는 소스의 설치 스크립트와 실행 스크립트를 사용하세요.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\setup.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\run.ps1
+```
+
+위 명령은 해당 스크립트 프로세스의 실행 정책만 설정합니다.
+Python 3.12를 쓰려면 설치 명령 끝에 `-PythonVersion 3.12`를 추가하세요.
+실행 스크립트는 앱 인수를 받으며 현재 폴더를 유지합니다.
 
 ## 파일 선택과 경로 편집
 
@@ -221,14 +304,17 @@ FFmpeg를 재배포하려면 [FFmpeg 라이선스 안내](https://ffmpeg.org/leg
 
 | 증상 | 조치 |
 | --- | --- |
-| Python 버전 오류 | 3.11 또는 3.12를 설치하세요. 기존 `.venv` 이름을 바꿔 보존한 뒤 다시 설치하세요. |
-| `whisper-ko`를 찾을 수 없음 | `.venv`를 활성화하거나 실행 스크립트를 사용하세요. |
+| Python 버전 오류 | 3.11 또는 3.12를 설치하세요. 셸 설치 스크립트에서는 `WHISPER_PYTHON`에 Python 경로를 설정하세요. |
+| `whisper-ko`를 찾을 수 없음 | 설치 절차의 실행 파일 전체 경로를 사용하거나 해당 폴더를 `PATH`에 추가하세요. |
 | FFmpeg를 찾을 수 없음 | FFmpeg를 설치하세요. 설치 중 `PATH`가 바뀌었다면 새 터미널을 여세요. |
-| macOS Tk import 오류 | Python과 같은 버전의 Homebrew `python-tk`를 설치하세요. `run.sh`를 사용하세요. |
+| macOS Tk import 오류 | Python과 같은 버전의 Homebrew `python-tk`를 설치하세요. 설치된 실행 파일을 사용하세요. |
 | Linux Tk import 오류 | Python과 같은 버전의 Tk 패키지를 설치하세요. |
 | Linux 디스플레이 없음 | CLI/TUI를 사용하세요. 진단에는 `doctor --no-gui --tui`를 사용하세요. |
 | TUI가 열리지 않음 | 대화형 터미널을 사용하세요. 창을 60열 × 24행 이상으로 늘리세요. |
-| Windows curses import 오류 | 지원하는 Python으로 설치 스크립트를 다시 실행하세요. |
+| Windows curses import 오류 | Windows 설치 절차에 따라 Python 3.11 또는 3.12로 릴리스 wheel을 설치하세요. |
+| 설치 체크섬 불일치 | 해당 GitHub 릴리스에서 설치 스크립트를 다시 받으세요. 불일치가 반복되면 보고하세요. |
+| 설치 실행 파일 경로가 이미 사용 중임 | 다른 `--bin-dir`를 지정하거나 기존 파일을 확인한 뒤 변경하세요. |
+| 설치 스크립트가 `/dev/tty`를 열 수 없음 | 설치는 완료됐습니다. 대화형 터미널에서 출력한 실행 파일 경로를 실행하세요. |
 | 결과 파일이 이미 있음 | 새 경로를 지정하세요. 파일 변환에서 교체하려면 명시적으로 확인하세요. |
 | 첫 실행이 오래 걸림 | 모델 다운로드와 로딩을 기다리세요. 네트워크와 디스크 여유 공간을 확인하세요. |
 | 결과가 비거나 잘못됨 | 음성 언어를 지정하세요. 오디오 크기와 녹음 품질을 확인하세요. |
@@ -242,18 +328,46 @@ FFmpeg를 재배포하려면 [FFmpeg 라이선스 안내](https://ffmpeg.org/leg
 
 ## 업데이트와 삭제
 
-소스 설치를 업데이트하기 전에 결과를 백업하세요.
-저장소를 원하는 릴리스로 갱신하세요. 설치 스크립트를 다시 실행하세요.
-직접 수정한 소스를 확인 없이 덮어쓰지 마세요.
+업데이트하거나 삭제하기 전에 앱을 종료하세요.
+필요한 원본 오디오와 결과는 보관하세요.
+
+### macOS와 Linux 릴리스 설치
+
+업데이트하려면 [README](../README.ko.md#설치)의 최신 설치 명령을 다시 실행하세요.
+경로를 지정했다면 같은 `--prefix`와 `--bin-dir` 값을 사용하세요.
+설치를 완료하면 실행 파일이 새 릴리스 폴더를 사용합니다.
+이전에 설치한 버전은 `<prefix>/releases/` 아래에 남습니다.
+
+이전 버전을 지우려면 텍스트 편집기에서 `whisper-ko` 실행 파일을 읽으세요.
+그 파일에 적힌 릴리스 폴더는 유지하세요.
+더 이상 필요하지 않은 이전 릴리스 폴더만 지우세요.
+설치한 릴리스 폴더를 이동하지 마세요. Python 환경이 원래 경로를 사용합니다.
+
+전체 설치를 삭제하려면 `~/.local/bin/whisper-ko`와 `~/.local/share/whisper-local-ko`를 지우세요.
+경로를 지정했다면 해당 실행 파일과 데이터 폴더를 지우세요.
+
+### Wheel 설치
+
+업데이트하려면 원하는 릴리스 URL로 wheel 설치 명령을 다시 실행하세요.
+같은 Python 환경을 사용하세요.
+설치 후 `whisper-ko --version`과 `whisper-ko doctor --no-gui --tui`를 확인하세요.
 
 활성화한 환경에서 다음 명령으로 패키지를 삭제하세요.
 
-```bash
+```sh
 python -m pip uninstall whisper-local-ko
 ```
 
+위의 Windows 설치를 삭제하려면 앱을 종료한 뒤 전용 `%LOCALAPPDATA%\whisper-local-ko` 폴더를 지우세요.
+다른 전용 환경을 사용했다면 앱을 종료한 뒤 해당 환경 폴더를 지우세요.
+
+### 소스 설치
+
+결과를 백업하세요.
+저장소를 원하는 릴리스로 갱신하세요. 설치 스크립트를 다시 실행하세요.
+직접 수정한 소스를 확인 없이 덮어쓰지 마세요.
 앱을 종료한 뒤 전용 `.venv`를 지울 수 있습니다.
-필요한 원본 오디오와 결과는 보관하세요.
-패키지 삭제 명령은 모델, 시스템 Python, Tk, FFmpeg를 지우지 않습니다.
+
+이 삭제 절차는 모델, 시스템 Python, Tk, FFmpeg를 지우지 않습니다.
 더 이상 사용하지 않는 모델 캐시 폴더만 지우세요.
 다른 앱이 같은 캐시를 사용할 수 있습니다.

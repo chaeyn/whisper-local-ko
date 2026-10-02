@@ -76,9 +76,11 @@ jobs:
       - name: Build distributions
         run: |
           python -m build
-          python -m twine check dist/*
+          python -m twine check dist/*.whl dist/*.tar.gz
       - name: Test installed wheel outside the source tree
         run: python scripts/check_wheel.py
+      - name: Prepare release installer and checksums
+        run: python scripts/prepare_release.py
       - name: Record installed dependencies
         run: python -m pip freeze > installed-dependencies.txt
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

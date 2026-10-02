@@ -1,5 +1,20 @@
 # Validation
 
+## GitHub release installation update: 0.1.2
+
+Date: 2026-10-02. Local host: macOS Apple Silicon, Python 3.11.17.
+
+- The default suite ran 112 tests: 111 passed and one optional model test was skipped.
+- Twenty release installer tests checked archive validation, failed updates, launcher conflicts, paths, and shell input.
+- A terminal test passed a fixture installer through a pipe and confirmed that `--run` gave the app a terminal for input.
+- Shell checks covered `sh` and `dash`. Python version guards also passed with Python optimization enabled.
+- The release preparation script checks version consistency and creates checksums for the wheel, source archive, and installer.
+
+Installer fixture tests use local test downloads. They do not prove that public release assets are available.
+The [release installation workflow](https://github.com/chaeyn/whisper-local-ko/actions/workflows/release-install.yml) checks published assets without a source checkout.
+Read its completed run and the [v0.1.2 release notes](https://github.com/chaeyn/whisper-local-ko/releases/tag/v0.1.2) for publication checks.
+The release notes record the manual terminal check after publication.
+
 ## Shell installation update: 0.1.1
 
 Date: 2026-10-02. Host: macOS Apple Silicon, Python 3.11.17.
@@ -94,8 +109,9 @@ python -m pip check
 python -m ruff check .
 python scripts/check_docs.py
 python -m build
-python -m twine check dist/*
+python -m twine check dist/*.whl dist/*.tar.gz
 python scripts/check_wheel.py
+python scripts/prepare_release.py
 ```
 
 Set `WHISPER_INTEGRATION=1` before you run `test_integration.py` to enable model downloads and actual inference.

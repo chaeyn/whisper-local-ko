@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.2 - 2026-10-02
+
+- Install from GitHub Releases without Git or a repository clone.
+- Verify the source archive checksum before installation.
+- Create a user-level launcher and preserve the caller's working folder.
+- Keep an existing installation available if an update fails.
+- Attach the TUI to the terminal after a piped installation.
+- Provide release-wheel instructions for Windows.
+- Check release downloads on macOS, Linux, and Windows after publication.
+- Enforce supported Python versions when Python optimization is enabled.
+
 ## 0.1.1 - 2026-10-02
 
 - Install and start the app with POSIX `sh`.

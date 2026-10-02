@@ -36,10 +36,8 @@ Linux 마이크 입력에는 실행 중인 PulseAudio 호환 서버가 필요합
 
 ## 설치
 
-먼저 Git, Python 3.11 또는 3.12, FFmpeg를 설치하세요.
-설치 스크립트는 이 폴더에 `.venv`를 만들고 Python 패키지를 설치합니다.
-macOS와 Linux에서는 `--run`을 붙이면 설치 후 TUI를 엽니다.
-설치만 하려면 `sh scripts/setup.sh`를 실행하세요. 나중에 실행할 때는 `sh scripts/run.sh`를 사용하세요.
+먼저 Python 3.11 또는 3.12와 FFmpeg를 설치하세요.
+macOS와 Linux에서는 GitHub 릴리스 설치 스크립트를 사용하세요. Git은 필요하지 않습니다.
 첫 모델 다운로드에는 인터넷 연결과 디스크 여유 공간이 필요합니다.
 
 ### macOS
@@ -47,77 +45,93 @@ macOS와 Linux에서는 `--run`을 붙이면 설치 후 TUI를 엽니다.
 [Homebrew](https://brew.sh/)가 없으면 먼저 설치하세요.
 다음 명령을 실행하세요.
 
-```bash
+```sh
 brew install python@3.11 python-tk@3.11 ffmpeg
-git clone https://github.com/chaeyn/whisper-local-ko.git
-cd whisper-local-ko
-sh scripts/setup.sh --run
+curl -fsSL https://github.com/chaeyn/whisper-local-ko/releases/latest/download/install.sh | sh -s -- --run
 ```
 
 ### Linux
 
 Ubuntu 24.04에서 다음 명령을 실행하세요.
 
-```bash
+```sh
 sudo apt update
-sudo apt install git python3 python3-venv python3-tk ffmpeg pulseaudio-utils
-git clone https://github.com/chaeyn/whisper-local-ko.git
-cd whisper-local-ko
-sh scripts/setup.sh --run
+sudo apt install curl python3 python3-venv python3-tk ffmpeg pulseaudio-utils
+curl -fsSL https://github.com/chaeyn/whisper-local-ko/releases/latest/download/install.sh | sh -s -- --run
 ```
 
 다른 배포판에서는 같은 기능의 패키지를 설치하세요.
 `python3 --version`이 3.11 또는 3.12인지 확인하세요.
-설치 스크립트는 Linux 시스템 패키지를 설치하지 않습니다.
+설치 스크립트는 시스템 패키지를 설치하지 않습니다.
+
+설치 스크립트는 GitHub Releases에서 버전을 고정한 소스 압축 파일을 받습니다.
+설치 전에 릴리스의 SHA-256 체크섬과 압축 파일을 대조합니다.
+설치 경로는 `~/.local/share/whisper-local-ko`이고 실행 파일은 `~/.local/bin/whisper-ko`입니다.
+`--run`을 붙이면 설치 후 TUI를 엽니다. 설치만 하려면 `--run`을 빼세요.
+나중에 앱을 실행하려면 다음 명령을 사용하세요.
+
+```sh
+"$HOME/.local/bin/whisper-ko"
+```
+
+새 설치가 실패하면 설치 스크립트는 이전 설치를 유지합니다.
+셸 설정 파일은 바꾸지 않습니다.
+설치 경로 지정, 업데이트, 삭제는 [사용 설명서](docs/user-guide.ko.md#릴리스-설치-옵션)를 확인하세요.
 
 ### Windows
 
 PowerShell에서 필수 프로그램을 설치하세요.
 
 ```powershell
-winget install --exact --id Git.Git
 winget install --exact --id Python.Python.3.11
 winget install --exact --id Gyan.FFmpeg
 ```
 
-새 PowerShell 창을 여세요. 다음 명령을 실행하세요.
+새 PowerShell 창을 여세요. 릴리스 패키지를 설치하세요.
 
 ```powershell
-git clone https://github.com/chaeyn/whisper-local-ko.git
-cd whisper-local-ko
-powershell -ExecutionPolicy Bypass -File .\scripts\setup.ps1
-powershell -ExecutionPolicy Bypass -File .\scripts\run.ps1
+$WhisperVenv = Join-Path $env:LOCALAPPDATA "whisper-local-ko\.venv"
+py -3.11 -m venv "$WhisperVenv"
+& "$WhisperVenv\Scripts\python.exe" -m pip install --upgrade pip
+& "$WhisperVenv\Scripts\python.exe" -m pip install torch==2.8.0 --index-url https://download.pytorch.org/whl/cpu
+& "$WhisperVenv\Scripts\python.exe" -m pip install https://github.com/chaeyn/whisper-local-ko/releases/download/v0.1.2/whisper_local_ko-0.1.2-py3-none-any.whl
+& "$WhisperVenv\Scripts\whisper-ko.exe" doctor --no-gui --tui
+& "$WhisperVenv\Scripts\whisper-ko.exe"
 ```
 
-위 명령은 해당 스크립트 프로세스의 실행 정책만 설정합니다.
-저장된 시스템 정책은 바꾸지 않습니다.
-Python 3.12를 쓰려면 설치 명령 끝에 `-PythonVersion 3.12`를 추가하세요.
+Python 3.12를 쓰려면 `-3.11`을 `-3.12`로 바꾸세요.
+이 명령은 릴리스 wheel을 사용합니다. Git 설치와 가상환경 활성화는 필요하지 않습니다.
+새 PowerShell 창에서 앱을 실행하려면 다음 명령을 사용하세요.
+
+```powershell
+& "$env:LOCALAPPDATA\whisper-local-ko\.venv\Scripts\whisper-ko.exe"
+```
 
 ### 기존 Python 환경
 
 Python 3.11 또는 3.12 가상환경을 사용하세요.
 Linux와 Windows에서는 CPU용 PyTorch를 먼저 설치하세요.
 
-```bash
+```sh
 python -m pip install torch==2.8.0 --index-url https://download.pytorch.org/whl/cpu
 ```
 
-그다음 저장소 폴더에서 다음 명령을 실행하세요.
+그다음 GitHub Releases의 wheel을 설치하세요.
 
-```bash
-python -m pip install .
+```sh
+python -m pip install https://github.com/chaeyn/whisper-local-ko/releases/download/v0.1.2/whisper_local_ko-0.1.2-py3-none-any.whl
 whisper-ko doctor --no-gui --tui
 whisper-ko
 ```
 
 패키지 이름은 `whisper-local-ko`입니다. 실행 명령은 `whisper-ko`입니다.
-이 설치 방법은 저장소 소스를 사용하므로 PyPI 배포가 필요하지 않습니다.
-가상환경 활성화와 삭제 방법은 [사용 설명서](docs/user-guide.ko.md)를 확인하세요.
+이 방법은 지원하는 각 OS에서 사용할 수 있으며 PyPI 배포가 필요하지 않습니다.
+소스 설치와 개발 절차는 [CONTRIBUTING.ko.md](CONTRIBUTING.ko.md#개발-환경-준비)를 확인하세요.
 
 ## 파일 변환
 
-macOS와 Linux에서는 `sh scripts/run.sh`로 TUI를 실행하세요.
-Windows에서는 위의 `run.ps1` 명령을 사용하세요.
+macOS와 Linux에서는 `"$HOME/.local/bin/whisper-ko"`를 실행하세요.
+Windows에서는 위의 설치된 실행 파일을 사용하세요.
 
 1. `b`를 눌러 파일 탐색기를 여세요.
 2. 오디오 파일을 선택하세요.
@@ -149,8 +163,9 @@ Windows에서는 위의 `run.ps1` 명령을 사용하세요.
 
 ## CLI와 GUI
 
-다음 예시는 활성화한 가상환경에서 `whisper-ko`를 사용합니다.
-실행 스크립트에도 같은 인수를 전달할 수 있습니다.
+다음 예시는 `PATH`에서 찾을 수 있는 `whisper-ko`를 사용합니다.
+위의 실행 파일 전체 경로에도 같은 인수를 전달할 수 있습니다.
+현재 터미널의 `PATH` 설정은 [명령과 실행 환경](docs/user-guide.ko.md#명령과-실행-환경)을 확인하세요.
 
 ```bash
 whisper-ko transcribe "meeting.m4a" --language ko --model small

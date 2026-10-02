@@ -19,18 +19,33 @@
 
 ## 개발 환경 준비
 
-1. [README](README.ko.md#설치)의 필수 프로그램을 설치하세요.
+1. Git과 [README](README.ko.md#설치)의 필수 프로그램을 설치하세요.
 2. GitHub에서 저장소를 fork하세요.
 3. fork한 저장소를 clone하세요.
 4. `main`에서 작업 브랜치를 만드세요.
-5. Python 3.11 또는 3.12 가상환경을 만들고 활성화하세요.
-6. 개발 의존성을 설치하세요.
+5. 아래의 OS별 명령으로 가상환경과 개발 의존성을 설치하세요.
 
-```bash
+README의 릴리스 설치 스크립트는 앱 사용자를 위한 것입니다.
+개발에는 저장소 소스를 사용하세요.
+설치 스크립트로 `.venv`와 실행 의존성을 먼저 준비할 수 있습니다.
+
+macOS와 Linux에서는 저장소 루트에서 다음 명령을 실행하세요.
+
+```sh
+sh scripts/setup.sh
+. .venv/bin/activate
 python -m pip install -e '.[dev]'
 ```
 
-설치 스크립트로 `.venv`와 실행 의존성을 먼저 준비할 수 있습니다.
+Windows PowerShell에서는 다음 명령을 실행하세요.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\setup.ps1
+& ".\.venv\Scripts\python.exe" -m pip install -e '.[dev]'
+$env:Path = "$PWD\.venv\Scripts;$env:Path"
+```
+
+이 명령은 현재 터미널의 `PATH`에 개발 환경을 추가합니다.
 편집 가능한 설치는 현재 소스 파일을 사용합니다.
 `whisper-ko doctor --no-gui --tui`로 환경을 확인하세요.
 
@@ -62,7 +77,8 @@ python -m unittest discover -s tests -v
 python -m pip check
 python -m ruff check .
 python -m build
-python -m twine check dist/*
+python -m twine check dist/*.whl dist/*.tar.gz
+python scripts/check_docs.py
 ```
 
 배포 전에는 새 환경에 빌드한 wheel을 설치하세요.
@@ -125,12 +141,29 @@ import 성공이나 빈 값이 아닌 결과만으로 번역 품질을 판단하
 
 ## 배포 점검
 
+배포할 커밋에서 릴리스 파일을 준비하세요.
+
+```sh
+python -m build
+python -m twine check dist/*.whl dist/*.tar.gz
+python scripts/prepare_release.py
+```
+
+준비 스크립트는 버전이 일치하는 `install.sh`를 `dist/`에 복사합니다.
+wheel, 소스 압축 파일, 설치 스크립트의 `SHA256SUMS.txt`를 만듭니다.
+이 네 파일을 함께 업로드하세요. 준비 스크립트는 파일을 공개하지 않습니다.
+
 관리자는 배포 전에 다음 항목을 확인합니다.
 
 - 버전과 배포 설명을 갱신합니다.
 - 배포 커밋에서 지원 환경의 CI를 실행합니다.
 - [Testing](docs/testing.md)의 실제 모델 검사를 실행합니다.
 - 새 환경에 wheel을 설치하고 확인합니다.
+- `sh`와 `dash`로 `install.sh`를 시험합니다. 파이프 입력도 확인합니다.
+- 체크섬 실패, 업데이트 실패, 공백 경로, 실행 파일 충돌을 확인합니다.
+- 문서의 clone 없는 설치 명령을 실제 릴리스 파일로 시험합니다.
+- `install.sh`, 소스 압축 파일, wheel, `SHA256SUMS.txt`를 함께 공개합니다.
+- `install.sh`의 버전을 릴리스 태그와 패키지 버전에 맞춥니다.
 - TUI 시작, 파일 선택, 진행률, 결과 보호, 종료를 확인합니다.
 - 실제 마이크 검사를 별도로 기록하거나 미검증 상태를 밝힙니다.
 - 문서 링크, 모델 출처, 패키지 내용을 확인합니다.

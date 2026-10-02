@@ -2,6 +2,7 @@
 import json
 import os
 from pathlib import Path
+import re
 import shlex
 import shutil
 import subprocess
@@ -17,8 +18,10 @@ with open(os.environ["FAKE_LOG"], "a", encoding="utf-8") as stream:
     stream.write(json.dumps({"args": args, "cwd": os.getcwd(),
                              "pythonpath": os.environ.get("PYTHONPATH")}) + "\\n")
 if args[:1] == ["-c"]:
-    if "assert" in args[1] and os.environ.get("FAKE_BAD_VENV") and ".venv" in invoked:
-        sys.exit(1)
+    if "version_info" in args[1] and "print" not in args[1]:
+        if os.environ.get("FAKE_BAD_PYTHON") or (os.environ.get("FAKE_BAD_VENV") and ".venv" in invoked):
+            sys.version_info = (3, 14, 0)
+        exec(compile(args[1], "<version check>", "exec"))
     if "print" in args[1]:
         print("3.11")
 elif args[:2] == ["-m", "venv"]:
@@ -32,6 +35,21 @@ elif args and args[0].endswith("whisper_m4a.py"):
 else:
     sys.exit("Unexpected Python invocation")
 '''
+
+
+class PythonVersionGuardTests(unittest.TestCase):
+    def test_all_install_guards_work_when_python_optimization_is_enabled(self):
+        for name in ("install.sh", "scripts/setup.sh", "scripts/setup.ps1"):
+            source = (ROOT / name).read_text(encoding="utf-8")
+            guards = re.findall(r"-c '(import sys; [^']*version_info[^']*)'", source)
+            self.assertTrue(guards, f"Missing Python compatibility check in {name}")
+            for guard in guards:
+                for minor, expected in ((10, 1), (11, 0), (12, 0), (13, 1), (14, 1)):
+                    with self.subTest(script=name, python=f"3.{minor}"):
+                        result = subprocess.run([sys.executable, "-O", "-c",
+                                                 f"import sys; sys.version_info = (3, {minor}, 0); {guard}"],
+                                                text=True, capture_output=True, timeout=10)
+                        self.assertEqual(result.returncode, expected, result.stderr)
 
 
 @unittest.skipIf(os.name == "nt", "Unix shell entrypoints; Windows uses PowerShell")
@@ -153,6 +171,20 @@ class ShellScriptTests(unittest.TestCase):
                     calls = self.app_calls(events)
                     self.assertEqual([call["args"][1:] for call in calls],
                                      [] if failure == "FAKE_PIP_EXIT" else [["doctor", "--no-gui", "--tui"]])
+
+    def test_optimized_python_still_rejects_unsupported_interpreter_and_venv(self):
+        for shell in SHELLS:
+            for invalid in ("FAKE_BAD_PYTHON", "FAKE_BAD_VENV"):
+                with self.subTest(shell=shell, invalid=invalid):
+                    if invalid == "FAKE_BAD_VENV":
+                        self.make_venv()
+                    result, events = self.invoke(shell, "setup.sh", PYTHONOPTIMIZE="1", **{invalid: "1"})
+                    self.assertEqual(result.returncode, 1, result.stderr)
+                    self.assertIn("incompatible" if invalid == "FAKE_BAD_VENV" else "Python 3.11 or 3.12", result.stderr)
+                    self.assertEqual(self.app_calls(events), [])
+                    self.assertFalse(any(event["args"][:2] == ["-m", "pip"] for event in events))
+                    if invalid == "FAKE_BAD_VENV":
+                        shutil.rmtree(self.project / ".venv")
 
 
 if __name__ == "__main__":

@@ -23,7 +23,7 @@ def app_version() -> str:
     try:
         return version("whisper-local-ko")
     except PackageNotFoundError:
-        return "0.1.1"
+        return "0.1.2"
 
 
 def doctor(gui: bool = True, tui: bool = False) -> bool:

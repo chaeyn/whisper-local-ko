@@ -19,18 +19,33 @@ A report or pull request does not guarantee a merge or a release date.
 
 ## Set up a development environment
 
-1. Install the prerequisites in the [README](README.md#install).
+1. Install Git and the prerequisites in the [README](README.md#install).
 2. Fork the repository on GitHub.
 3. Clone your fork.
 4. Create a branch from `main`.
-5. Create and activate a Python 3.11 or 3.12 virtual environment.
-6. Install the development dependencies:
+5. Use the commands below to install a virtual environment and development dependencies for your OS.
 
-```bash
+The release installer in the README is for app users.
+Use a source checkout for development.
+The setup scripts can create `.venv` and install the runtime dependencies first.
+
+On macOS or Linux, run from the repository root:
+
+```sh
+sh scripts/setup.sh
+. .venv/bin/activate
 python -m pip install -e '.[dev]'
 ```
 
-The setup scripts can create `.venv` and install the runtime dependencies first.
+On Windows PowerShell, run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\setup.ps1
+& ".\.venv\Scripts\python.exe" -m pip install -e '.[dev]'
+$env:Path = "$PWD\.venv\Scripts;$env:Path"
+```
+
+These commands put the development environment on `PATH` for the current terminal.
 The editable installation uses your current source files.
 Run `whisper-ko doctor --no-gui --tui` to check that environment.
 
@@ -62,7 +77,8 @@ python -m unittest discover -s tests -v
 python -m pip check
 python -m ruff check .
 python -m build
-python -m twine check dist/*
+python -m twine check dist/*.whl dist/*.tar.gz
+python scripts/check_docs.py
 ```
 
 Install the built wheel in a clean environment before a release.
@@ -125,12 +141,29 @@ Third-party fixtures keep their stated licenses.
 
 ## Release checklist
 
+Prepare the release files from the intended release commit:
+
+```sh
+python -m build
+python -m twine check dist/*.whl dist/*.tar.gz
+python scripts/prepare_release.py
+```
+
+The preparation script copies the version-matched `install.sh` into `dist/`.
+It creates `SHA256SUMS.txt` for the wheel, source archive, and installer.
+Upload these four assets together. The script does not publish them.
+
 Maintainers use this checklist before they publish a release:
 
 - Update the version and release notes.
 - Run the supported CI matrix on the release commit.
 - Run the real-model checks described in [Testing](docs/testing.md).
 - Install and check the wheel in a clean environment.
+- Test `install.sh` with `sh` and `dash`, including input from a pipe.
+- Check checksum failures, failed updates, paths with spaces, and launcher conflicts.
+- Test the documented no-clone commands against the release assets.
+- Publish `install.sh`, the source archive, the wheel, and `SHA256SUMS.txt` together.
+- Keep the version in `install.sh` consistent with the release tag and package version.
 - Check TUI start, file selection, progress, result protection, and exit.
 - Record physical microphone checks separately, or state that they are unverified.
 - Check documentation links, model attribution, and package contents.
